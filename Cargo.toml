@@ -1,6 +1,6 @@
 [package]
 name = "ws-gonzale"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Christoffer Lantz <christoffer.lantz@filmskaparna.se>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -17,11 +17,6 @@ async-trait = "0.1.36"
 
 sha1 = "0.6.0"
 base64 = "0.12.3"
-
-[workspace]
-members = [
-    "examples/life-cycle"
-]
 
 [[example]]
 name = "life-cycle"

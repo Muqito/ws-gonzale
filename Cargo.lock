@@ -318,13 +318,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd7d4bd64732af4bf3a67f367c27df8520ad7e230c5817b8ff485864d80242b9"
 
 [[package]]
-name = "life-cycle"
-version = "0.1.0"
-dependencies = [
- "ws-gonzale",
-]
-
-[[package]]
 name = "log"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -618,7 +611,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "ws-gonzale"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-channel",
  "async-net",
