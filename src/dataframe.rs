@@ -99,38 +99,38 @@ pub mod flat {
         pub fn get_fin(&self) -> bool {
             self.data
                 .get(0)
-                .map(|&s| ((frame_positions::FIN & s) == frame_positions::FIN))
+                .map(|s| ((frame_positions::FIN & s) == frame_positions::FIN))
                 .unwrap_or(false)
         }
         pub fn get_rsv1(&self) -> bool {
             self.data
                 .get(0)
-                .map(|&s| ((frame_positions::RSV1 & s) == frame_positions::RSV1))
+                .map(|s| ((frame_positions::RSV1 & s) == frame_positions::RSV1))
                 .unwrap_or(false)
         }
         pub fn get_rsv2(&self) -> bool {
             self.data
                 .get(0)
-                .map(|&s| ((frame_positions::RSV2 & s) == frame_positions::RSV2))
+                .map(|s| ((frame_positions::RSV2 & s) == frame_positions::RSV2))
                 .unwrap_or(false)
         }
         pub fn get_rsv3(&self) -> bool {
             self.data
                 .get(0)
-                .map(|&s| ((frame_positions::RSV3 & s) == frame_positions::RSV3))
+                .map(|s| ((frame_positions::RSV3 & s) == frame_positions::RSV3))
                 .unwrap_or(false)
         }
         pub fn get_opcode(&self) -> u8 {
             self.data
                 .get(0)
                 // Get far most right bits
-                .map(|&s| s & 0b00001111)
+                .map(|s| s & 0b00001111)
                 .unwrap_or(0)
         }
         pub fn get_mask(&self) -> bool {
             self.data
                 .get(1)
-                .map(|&s| ((frame_positions::MASK & s) == frame_positions::MASK))
+                .map(|s| ((frame_positions::MASK & s) == frame_positions::MASK))
                 .unwrap_or(false)
         }
         pub fn get_payload_length_from_second_frame(&self) -> u8 {
@@ -171,12 +171,15 @@ pub mod flat {
         pub fn get_extended_payload_length(&self) -> u64 {
             self.get_payload_length_from_second_frame() as u64
         }
+        #[inline(always)]
         pub fn get_masking_key_size(&self) -> u8 {
             4
         }
+        #[inline(always)]
         pub fn get_initial_frame_size(&self) -> u8 {
             2
         }
+        #[inline(always)]
         pub fn get_extra_payload_size(&self) -> u8 {
             match self.get_payload_length_from_second_frame() {
                 127 => 8,
@@ -185,9 +188,11 @@ pub mod flat {
                 _ => panic!("Invalid size"),
             }
         }
+        #[inline(always)]
         pub fn get_full_payload_size(&self) -> u64 {
             self.get_initial_frame_size() as u64 + self.get_masking_key_size() as u64 + self.get_extra_payload_size() as u64 + self.get_payload_length()
         }
+        #[inline(always)]
         pub fn get_unmasked_payload(&self) -> Vec<u8> {
             match self.get_mask() {
                 true => mask_payload_vec(self.get_payload(), self.get_masking_key()),
