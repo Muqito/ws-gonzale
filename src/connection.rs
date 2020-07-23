@@ -7,15 +7,13 @@ use {
         message::Message,
         dataframe::get_buffer,
     },
+    async_channel::Sender,
     async_net::TcpStream,
     async_std::task,
+    async_trait::async_trait,
     futures::{
         AsyncReadExt,
         AsyncWriteExt,
-    },
-    async_trait::async_trait,
-    async_channel::{
-        Sender
     },
 };
 
@@ -77,7 +75,6 @@ impl WsConnection {
         let dataframe = dataframe::flat::Dataframe::new(peeked_buff.to_vec());
 
         let mut payload: Vec<u8> = vec![0; dataframe.get_full_payload_size() as usize];
-
 
         self.tcp_stream.read_exact(&mut payload).await?;
 
