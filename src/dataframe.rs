@@ -123,11 +123,8 @@ pub mod flat {
         pub fn get_opcode(&self) -> u8 {
             self.data
                 .get(0)
-                .map(|&s| {
-                    let d = s << 4;
-                    let opcode = d >> 4;
-                    opcode
-                })
+                // Get far most right bits
+                .map(|&s| s & 0b00001111)
                 .unwrap_or(0)
         }
         pub fn get_mask(&self) -> bool {
@@ -139,10 +136,7 @@ pub mod flat {
         pub fn get_payload_length_from_second_frame(&self) -> u8 {
             self.data
                 .get(1)
-                .map(|s| {
-                    let b = s << 1;
-                    b >> 1
-                })
+                .map(|s| s & 0b01111111)
                 .unwrap_or(0)
         }
         pub fn get_payload_length(&self) -> u64 {
@@ -222,7 +216,6 @@ pub mod flat {
     mod tests {
         use super::*;
         use crate::message::Message;
-        use crate::dataframe::get_message;
 
         #[test]
         fn test_buffer_hello_world() {
@@ -407,9 +400,7 @@ pub mod structered {
     impl From<u8> for Opcode {
         fn from(b: u8) -> Self {
             // Remove Fin, Rsv1, Rsv2 and Rsv3 to get out opcode
-            let shifted_bytes = b << 4;
-            let opcode = shifted_bytes >> 4; // Move back
-            Opcode(opcode)
+            Opcode(b & 0b00001111)
         }
     }
     impl PayloadLength {
@@ -427,9 +418,7 @@ pub mod structered {
     }
     impl From<u8> for PayloadLength {
         fn from(size: u8) -> Self {
-            let remove_mask = size << 1;
-            let payload_length = remove_mask >> 1; // move back
-            PayloadLength::new(payload_length as u64)
+            PayloadLength::new((size & 0b01111111) as u64)
         }
     }
     impl MaskingKey {
