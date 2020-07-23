@@ -79,6 +79,7 @@ pub fn get_message(buffer: &[u8]) -> Message {
 pub mod flat {
     use crate::dataframe::{mask_payload_vec};
     use crate::message::Message;
+    use crate::mask_payload_mut;
 
     mod frame_positions {
         pub const FIN: u8 = 128;
@@ -99,44 +100,44 @@ pub mod flat {
         pub fn get_fin(&self) -> bool {
             self.data
                 .get(0)
-                .map(|s| ((frame_positions::FIN & s) == frame_positions::FIN))
+                .map(|&s| ((frame_positions::FIN & s) == frame_positions::FIN))
                 .unwrap_or(false)
         }
         pub fn get_rsv1(&self) -> bool {
             self.data
                 .get(0)
-                .map(|s| ((frame_positions::RSV1 & s) == frame_positions::RSV1))
+                .map(|&s| ((frame_positions::RSV1 & s) == frame_positions::RSV1))
                 .unwrap_or(false)
         }
         pub fn get_rsv2(&self) -> bool {
             self.data
                 .get(0)
-                .map(|s| ((frame_positions::RSV2 & s) == frame_positions::RSV2))
+                .map(|&s| ((frame_positions::RSV2 & s) == frame_positions::RSV2))
                 .unwrap_or(false)
         }
         pub fn get_rsv3(&self) -> bool {
             self.data
                 .get(0)
-                .map(|s| ((frame_positions::RSV3 & s) == frame_positions::RSV3))
+                .map(|&s| ((frame_positions::RSV3 & s) == frame_positions::RSV3))
                 .unwrap_or(false)
         }
         pub fn get_opcode(&self) -> u8 {
             self.data
                 .get(0)
                 // Get far most right bits
-                .map(|s| s & 0b00001111)
+                .map(|&s| s & 0b00001111)
                 .unwrap_or(0)
         }
         pub fn get_mask(&self) -> bool {
             self.data
                 .get(1)
-                .map(|s| ((frame_positions::MASK & s) == frame_positions::MASK))
+                .map(|&s| ((frame_positions::MASK & s) == frame_positions::MASK))
                 .unwrap_or(false)
         }
         pub fn get_payload_length_from_second_frame(&self) -> u8 {
             self.data
                 .get(1)
-                .map(|s| s & 0b01111111)
+                .map(|&s| s & 0b01111111)
                 .unwrap_or(0)
         }
         pub fn get_payload_length(&self) -> u64 {
@@ -149,24 +150,23 @@ pub mod flat {
         }
         pub fn get_masking_key(&self) -> [u8; 4] {
             let mut masking_key: [u8; 4] = [0; 4];
-            let data = self.data.iter();
             let buffer = match self.get_payload_length_from_second_frame() {
-                0..=125 => data.skip(2),
-                126 => data.skip(4),
-                127 => data.skip(10),
+                0..=125 if self.data.len() >= 6 => &self.data[2..6],
+                126 if self.data.len() >= 8 => &self.data[4..8],
+                127 if self.data.len() >= 14 => &self.data[10..14],
                 size => panic!("Masking key not allowed: {}", size),
-            }.take(4).map(|&s| s).collect::<Vec<u8>>();
+            };
             masking_key.copy_from_slice(&buffer);
             masking_key
         }
         pub fn get_payload(&self) -> Vec<u8> {
-            let data = self.data.clone().into_iter();
+            let data = self.data.iter();
             match self.get_payload_length_from_second_frame() {
                 0..=125 => data.skip(6),
                 126 => data.skip(8),
                 127 => data.skip(14),
                 size => panic!("Payload not allowed: {}", size),
-            }.take(self.get_payload_length() as usize).collect()
+            }.take(self.get_payload_length() as usize).map(|&s| s).collect()
         }
         pub fn get_extended_payload_length(&self) -> u64 {
             self.get_payload_length_from_second_frame() as u64
@@ -194,10 +194,8 @@ pub mod flat {
         }
         #[inline(always)]
         pub fn get_unmasked_payload(&self) -> Vec<u8> {
-            match self.get_mask() {
-                true => mask_payload_vec(self.get_payload(), self.get_masking_key()),
-                false => self.get_payload().to_vec(),
-            }
+            let mut payload = self.get_payload();
+            if self.get_mask() { mask_payload_mut(&mut payload, self.get_masking_key()).to_vec() } else { payload }
         }
         pub fn get_message(&self) -> Option<Message> {
             match self.get_opcode() {
@@ -297,10 +295,11 @@ pub mod flat {
         }
     }
 }
-pub mod structered {
+pub mod structured {
     use std::ops::Deref;
     use crate::message::Message;
     use crate::dataframe::mask_payload;
+    use crate::mask_payload_mut;
 
     #[derive(Debug)]
     enum Fin {
@@ -498,6 +497,7 @@ pub mod structered {
                 masking_key,
             }
         }
+        #[inline(always)]
         pub fn get_extra_payload_size(&self) -> u8 {
             match self.payload_length.get_payload_length() {
                 127 => 8,
@@ -509,12 +509,15 @@ pub mod structered {
         pub fn get_extended_payload_length(&self) -> u64 {
             self.extended_payload_length.get_payload_length()
         }
+        #[inline(always)]
         pub fn get_masking_key_size(&self) -> u8 {
             4
         }
+        #[inline(always)]
         pub fn get_initial_frame_size(&self) -> u8 {
             2
         }
+        #[inline(always)]
         pub fn get_full_payload_size(&self) -> u64 {
             self.get_initial_frame_size() as u64 + self.get_masking_key_size() as u64 + self.get_extra_payload_size() as u64 + self.get_extended_payload_length()
         }
@@ -530,9 +533,10 @@ pub mod structered {
             match (opcode, payload) {
                 (Some(opcode), Some(payload)) => match opcode {
                     1 => {
+                        let mut new_payload = payload.clone().to_owned();
                         // TODO: Remove unwrap here
                         let mask = self.body.as_ref().map(|body| body.masking_key.get_masking_key()).unwrap();
-                        let masked_data = mask_payload(payload, mask);
+                        let masked_data = mask_payload_mut(&mut new_payload, mask);
                         let message = Message::Text(String::from_utf8_lossy(&masked_data).to_string());
                         Some(message)
                     },

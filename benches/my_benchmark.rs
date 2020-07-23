@@ -18,18 +18,24 @@ fn unmasking_payload_mut(c: &mut Criterion) {
     });
 }
 fn bench_dataframe(c: &mut Criterion) {
-    c.bench_function("Buffer to dataframe::flat", |b| {
+    let mut group = c.benchmark_group("Extract dataframe");
+    group.bench_function("dataframe::flat", |b| {
         b.iter(|| {
             let buffer: Vec<u8> = vec![129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18];
-            let _: ws_gonzale::flat::Dataframe = buffer.into();
+            let dataframe: ws_gonzale::flat::Dataframe = buffer.into();
+            let message = dataframe.get_message();
+            message.unwrap()
         })
     });
-    c.bench_function("Buffer to dataframe::structured", |b| {
+    group.bench_function("dataframe::structured", |b| {
         b.iter(|| {
             let buffer: Vec<u8> = vec![129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18];
-            let _: ws_gonzale::structered::Dataframe = buffer.into();
+            let dataframe: ws_gonzale::structured::Dataframe = buffer.into();
+            let message = dataframe.get_message();
+            message.unwrap()
         })
     });
+    group.finish();
 }
 
 
