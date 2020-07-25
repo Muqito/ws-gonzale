@@ -72,14 +72,13 @@ impl WsConnection {
         let mut peeked_buff: [u8; 14] = [0; 14];
         self.tcp_stream.peek(&mut peeked_buff).await?;
 
-        let dataframe = dataframe::flat::Dataframe::new(peeked_buff.to_vec());
+        let dataframe = dataframe::DataframeBuilder::new(peeked_buff.to_vec()).unwrap();
+        let mut payload: Vec<u8> = vec![0; dataframe.get_full_frame_length() as usize];
 
-        let mut payload: Vec<u8> = vec![0; dataframe.get_full_payload_size() as usize];
 
         self.tcp_stream.read_exact(&mut payload).await?;
 
-        let dataframe: dataframe::flat::Dataframe = payload.into();
-
+        let dataframe = dataframe::DataframeBuilder::new(payload)?;
         // Unwrap since we already have a .or() in place. If no message or `Message::Unknown` just return `Message::Unknown`
         let message = dataframe.get_message().or(Some(Message::Unknown)).unwrap();
 
