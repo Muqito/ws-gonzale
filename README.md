@@ -1,11 +1,13 @@
 # Ws-Gonzale
-Ws Gonzale is aimed to be a async ws-server with "presence" and shared data.
+Ws Gonzale is aimed to be a async ws-server and that's it.
 
-Right now it's just in it's most naive representation and the Wsframe reader isn't in it's final form yet.
+Right now it's just in it's most naive representation and it's [not fully compatible yet](#ws-protocol)
 
-I Also didn't want to just copy another framework.
+I also want to include some good examples of "presence" and shared data.
 
-## Basic overview
+I didn't want to just copy another framework.
+
+## Basic overview of the examples/life-cycle
 ```
 +--------+       +--------------+     +------+
 | Client |<----->| WsConnection |<----| MPMC |<-------<-------.
