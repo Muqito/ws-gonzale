@@ -8,9 +8,10 @@ use {
     async_trait::async_trait,
     futures::{AsyncReadExt, AsyncWriteExt},
 };
-
+/// Channels is sent to the struct implementing [`WsClientHook`] so they can use it to send to the mpmc channel or directly to the [`TcpStream`]
 pub type Channels = (Sender<Vec<u8>>, TcpStream);
 
+/// Trait that's used on a struct passed to [`WsConnection`] so we can set [`Channels`] but also listen for events.
 #[async_trait]
 pub trait WsClientHook {
     /// Once the user has been upgraded from a regular HTTP GET request to a WS connection that's kept open.
@@ -24,7 +25,7 @@ pub trait WsClientHook {
 }
 /// Our WSConnection after it's been upgraded from a TCPStream
 pub struct WsConnection {
-    /// Our TcpStream from `async-net`
+    /// Our [`TcpStream`] from [`async-net`]
     tcp_stream: TcpStream,
     /// Our multi producer / multi consumer channel channels we are creating upon creating the connection
     channel: Channel<Vec<u8>>,

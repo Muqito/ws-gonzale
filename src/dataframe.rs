@@ -1,5 +1,6 @@
 use crate::{message::Message, WsGonzaleError, WsGonzaleResult};
 
+/// Converts a [`Message`] to a `Vec<u8>`
 #[inline(always)]
 pub fn get_buffer(message: Message) -> Vec<u8> {
     let mut buffer: Vec<u8> = Vec::new();
@@ -36,8 +37,9 @@ pub fn mask_payload<'a, 'b>(incoming: &'a mut &'b mut [u8], mask: [u8; 4]) -> &'
     }
     data
 }
-
+/// This helps build up our [`Dataframe`]
 pub struct DataframeBuilder(Vec<u8>);
+/// Dataframe created by [`DataframeBuilder`] that represents the content from a Websocket frame
 #[derive(Debug)]
 pub struct Dataframe {
     fin: bool,
@@ -52,7 +54,7 @@ pub struct Dataframe {
     payload: Vec<u8>,
 }
 #[derive(PartialEq)]
-pub enum Opcode {
+enum Opcode {
     Continuation = 0,
     Text = 1,
     Close = 8,

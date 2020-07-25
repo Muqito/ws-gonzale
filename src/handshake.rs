@@ -16,7 +16,7 @@ fn sha1_str(s: &str) -> [u8; 20] {
     let bytes = sha1.digest().bytes();
     bytes
 }
-pub fn get_accept_from_key(key: &str) -> Result<String, String> {
+fn get_accept_from_key(key: &str) -> Result<String, String> {
     let mut accept_key = String::with_capacity(key.len() + 36);
     accept_key.push_str(&key);
     accept_key.push_str(MAGIC_GUID);
@@ -28,7 +28,7 @@ pub fn get_accept_from_key(key: &str) -> Result<String, String> {
 struct Headers;
 
 impl Headers {
-    pub fn from_buffer(buffers: &[u8]) -> HashMap<String, String> {
+    fn from_buffer(buffers: &[u8]) -> HashMap<String, String> {
         String::from_utf8_lossy(&buffers)
             .split("\r\n")
             .filter(|s| !s.is_empty())
@@ -43,16 +43,16 @@ impl Headers {
     }
 }
 
-pub struct Handshake {
+struct Handshake {
     headers: HashMap<String, String>,
 }
 
 impl Handshake {
-    pub fn new(headers: HashMap<String, String>) -> Self {
+    fn new(headers: HashMap<String, String>) -> Self {
         Self { headers }
     }
     /// Quickly writes a response to the TcpStream with a valid `Sec-Websocket-Accept: {key}` if available
-    pub async fn handshake(&mut self, sender: &mut TcpStream) -> AsyncResult<()> {
+    async fn handshake(&mut self, sender: &mut TcpStream) -> AsyncResult<()> {
         let default_str = String::new();
         let key = self
             .headers
@@ -65,7 +65,7 @@ impl Handshake {
         Ok(())
     }
 }
-
+/// Upgrades the incoming GET request to a keep-open WebSocket connection
 pub async fn handshake(mut stream: &mut TcpStream) -> AsyncResult<()> {
     let mut buffers: Vec<u8> = vec![0u8; 1000];
     stream.read(&mut buffers).await?;
