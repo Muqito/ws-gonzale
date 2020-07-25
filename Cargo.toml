@@ -1,6 +1,6 @@
 [package]
 name = "ws-gonzale"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Christoffer Lantz <christoffer.lantz@filmskaparna.se>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
