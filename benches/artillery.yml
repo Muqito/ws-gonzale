@@ -1,0 +1,12 @@
+config:
+  target: "ws://127.0.0.1:8080/"
+  phases:
+    - duration: 20  # Test for 20 seconds
+      arrivalRate: 50 # Every second, add 50 users
+      rampTo: 1000 # Ramp it up to 1000 users over the 20s period
+      name: "Ramping up the load"
+scenarios:
+  - engine: "ws"
+    flow:
+      - send: 'hello'
+      - think: 5
