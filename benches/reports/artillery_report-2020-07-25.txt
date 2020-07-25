@@ -1,0 +1,117 @@
+>artillery run artillery.yml
+Started phase 0 (Ramping up the load), duration: 20s @ 17:59:58(+0200) 2020-07-25
+Report @ 18:00:08(+0200) 2020-07-25
+Elapsed time: 10 seconds
+  Scenarios launched:  1345
+  Scenarios completed: 534
+  Requests completed:  1339
+  Mean response/sec: 134.17
+  Response time (msec):
+    min: 0
+    max: 0.7
+    median: 0.1
+    p95: 0.1
+    p99: 0.2
+  Codes:
+    0: 1339
+
+Report @ 18:00:18(+0200) 2020-07-25
+Elapsed time: 20 seconds
+  Scenarios launched:  2104
+  Scenarios completed: 1771
+  Requests completed:  2098
+  Mean response/sec: 210.43
+  Response time (msec):
+    min: 0
+    max: 3.5
+    median: 0
+    p95: 0.1
+    p99: 0.3
+  Codes:
+    0: 2098
+
+Warning:
+CPU usage of Artillery seems to be very high (pids: 2316)
+which may severely affect its performance.
+See https://artillery.io/docs/faq/#high-cpu-warnings for details.
+
+Report @ 18:00:28(+0200) 2020-07-25
+Elapsed time: 30 seconds
+  Scenarios launched:  2507
+  Scenarios completed: 2379
+  Requests completed:  2491
+  Mean response/sec: 249.1
+  Response time (msec):
+    min: 0
+    max: 1.7
+    median: 0
+    p95: 0.1
+    p99: 0.3
+  Codes:
+    0: 2491
+
+Report @ 18:00:38(+0200) 2020-07-25
+Elapsed time: 40 seconds
+  Scenarios launched:  2823
+  Scenarios completed: 2669
+  Requests completed:  2823
+  Mean response/sec: 282.58
+  Response time (msec):
+    min: 0
+    max: 5.2
+    median: 0
+    p95: 0.1
+    p99: 0.2
+  Codes:
+    0: 2823
+
+Warning: High CPU usage warning (pids: 2316).
+See https://artillery.io/docs/faq/#high-cpu-warnings for details.
+
+Report @ 18:00:48(+0200) 2020-07-25
+Elapsed time: 50 seconds
+  Scenarios launched:  2189
+  Scenarios completed: 2949
+  Requests completed:  2217
+  Mean response/sec: 222.37
+  Response time (msec):
+    min: 0
+    max: 4.3
+    median: 0
+    p95: 0.1
+    p99: 0.2
+  Codes:
+    0: 2217
+
+Report @ 18:00:50(+0200) 2020-07-25
+Elapsed time: 52 seconds
+  Scenarios launched:  0
+  Scenarios completed: 666
+  Requests completed:  0
+  Mean response/sec: NaN
+  Response time (msec):
+    min: NaN
+    max: NaN
+    median: NaN
+    p95: NaN
+    p99: NaN
+
+All virtual users finished
+Summary report @ 18:00:50(+0200) 2020-07-25
+  Scenarios launched:  10968
+  Scenarios completed: 10968
+  Requests completed:  10968
+  Mean response/sec: 208.36
+  Response time (msec):
+    min: 0
+    max: 5.2
+    median: 0
+    p95: 0.1
+    p99: 0.2
+  Scenario counts:
+    0: 10968 (100%)
+  Codes:
+    0: 10968
+
+
+Ws-Gonzale end report: Client: 10966 left, current total: 0

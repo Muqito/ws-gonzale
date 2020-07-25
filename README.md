@@ -11,6 +11,21 @@ If you wanna run a simple WS server
 cargo run --example life-cycle
 ```
 
+## Benchmark
+### Rust benchmark
+```
+cargo run bench
+```
+### Using artillery
+Start the test server first
+```
+cargo run --example life-cycle
+```
+and then in another window run
+```
+artillery run benches/artillery.yml
+```
+
 ## FAQ
 
 ### Why not use X library?
