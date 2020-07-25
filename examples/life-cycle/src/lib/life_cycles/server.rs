@@ -16,6 +16,7 @@ use {
             sync::Arc,
         },
     },
+    futures::{AsyncWriteExt}
 };
 
 /// Takes care of basic `server-lifecycle`
@@ -31,8 +32,14 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                     if let Message::Text(_) = message {
                         let buffer = get_buffer(message);
                         let connections = server_data.connections.lock().await;
-                        for (_id, sender) in connections.iter() {
-                            let _ = sender.send(buffer.clone()).await;
+
+                        for (_id, (_mpmc_channel, tcp_stream)) in connections.iter() {
+                            // clone would be needed even though the lifetime seems OK in this scope.
+                            // But remember; we are sending it through a mpmc channel
+                            // In theory; this could be run in a hundred days.
+                            // So writing to the tcp_stream which we don't need to clone it before sending and writing to tcp_stream is more performant.
+                            // let _ = _mpmc_channel.send(buffer.clone()).await;
+                            let _ = tcp_stream.to_owned().write_all(&buffer).await;
                         }
                     }
                 },
@@ -43,8 +50,8 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                     println!("Client: {} left, current total: {}", id, total);
                 }
                 // Welcome my dear friend; someone has joined our beloved server
-                ServerMessage::ClientJoined((id, channel)) => {
-                    server_data.connections.lock().await.insert(id, channel);
+                ServerMessage::ClientJoined((id, channels)) => {
+                    server_data.connections.lock().await.insert(id, channels);
                     let total = server_data.get_nr_of_connections().await;
                     println!("Client: {} joined, current total: {}", id, total);
                 }

@@ -1,5 +1,6 @@
 pub use {
     ws_gonzale::{
+        Channels,
         Channel,
         Message,
         async_channel::{self, Sender, Receiver},
@@ -7,14 +8,15 @@ pub use {
     },
     std::collections::HashMap,
 };
+
 pub enum ServerMessage {
     ClientMessage(Message),
-    ClientJoined((u32, Sender<Vec<u8>>)),
+    ClientJoined((u32, Channels)),
     ClientDisconnected(u32)
 }
 pub struct ServerData {
     channel: Channel<ServerMessage>,
-    pub connections: Arc<Mutex<HashMap<u32, Sender<Vec<u8>>>>>
+    pub connections: Arc<Mutex<HashMap<u32, Channels>>>
 }
 impl ServerData {
     pub fn new() -> Self {

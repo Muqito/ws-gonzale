@@ -4,6 +4,7 @@ use {
         ServerData
     },
     ws_gonzale::{
+        Channels,
         Server,
         WsConnection,
         WsClientHook,
@@ -17,20 +18,21 @@ use {
         async_channel::Sender,
         async_trait::async_trait,
     },
+
+    std::sync::atomic::{AtomicUsize, Ordering}
 };
 static ID: AtomicUsize = AtomicUsize::new(1);
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct ConnectionEvents {
     id: u32,
     server_sender: Sender<ServerMessage>,
-    ws_writer: Option<Sender<Vec<u8>>>
+    channels: Option<Channels>
 }
 impl ConnectionEvents {
     pub fn new(server_sender: Sender<ServerMessage>) -> ConnectionEvents {
         Self {
             id: ID.fetch_add(1, Ordering::SeqCst) as u32,
-            ws_writer: None,
+            channels: None,
             server_sender
         }
     }
@@ -41,8 +43,8 @@ impl ConnectionEvents {
 #[async_trait]
 impl WsClientHook for ConnectionEvents {
     async fn after_handshake(&mut self) -> Result<(), ()> {
-        if let Some(ws_writer) = self.ws_writer.take() {
-            let _ = self.server_sender.send(ServerMessage::ClientJoined((self.get_id(), ws_writer))).await;
+        if let Some(channels) = self.channels.take() {
+            let _ = self.server_sender.send(ServerMessage::ClientJoined((self.get_id(), channels))).await;
         }
         Ok(())
     }
@@ -57,8 +59,8 @@ impl WsClientHook for ConnectionEvents {
         Ok(())
     }
 
-    fn set_ws_writer(&mut self, ws_writer: Sender<Vec<u8>>) {
-        self.ws_writer = Some(ws_writer);
+    fn set_channels(&mut self, channels: Channels) {
+        self.channels = Some(channels);
     }
 }
 pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Error>> {
@@ -84,7 +86,7 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                         break;
                     }
                 }
-                // Required because just Ok(()) would yield ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+                // Cannot refer type, see: https://rust-lang.github.io/async-book/07_workarounds/03_err_in_async_blocks.html
                 Ok::<(), std::io::Error>(())
             });
         }

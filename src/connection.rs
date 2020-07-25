@@ -17,6 +17,8 @@ use {
     },
 };
 
+pub type Channels = (Sender<Vec<u8>>, TcpStream);
+
 #[async_trait]
 pub trait WsClientHook {
     /// Once the user has been upgraded from a regular HTTP GET request to a WS connection that's kept open.
@@ -26,7 +28,7 @@ pub trait WsClientHook {
     /// When we've interpreted a complete WS frame packet
     async fn on_message(&self, message: &Message) -> Result<(), ()>;
     /// This our multi producer / multi consumer channel. (Could be done with a mpsc channel as well since we only ever use this once in the code?)
-    fn set_ws_writer(&mut self, ws_writer: Sender<Vec<u8>>);
+    fn set_channels(&mut self, ws_writer: Channels);
 }
 /// Our WSConnection after it's been upgraded from a TCPStream
 pub struct WsConnection {
@@ -96,13 +98,10 @@ impl WsConnection {
         Ok(())
     }
     /// Clones the Sender channel and returns it. This is so we can have multiple places where we can send to this channel if desired.
-    fn get_internal_ws_writer(&self) -> Sender<Vec<u8>> {
-        self.channel.0.clone()
-    }
     /// Setup a reader of the multi producer and write to the underlying tcp_stream of our guest client.
     fn setup_listeners(&mut self) {
         // Send the WsWriter to this stream to the client hook
-        self.client_hook.set_ws_writer(self.get_internal_ws_writer());
+        self.client_hook.set_channels((self.channel.0.clone(), self.tcp_stream.clone()));
 
         // Clone this because we are moving it into a new future which could be on another thread.
         let reader = self.channel.1.clone();
