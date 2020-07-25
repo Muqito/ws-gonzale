@@ -21,7 +21,8 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                 ServerMessage::ClientMessage(message) => {
                     // Ooh, the client sent a Text frame.. how exciting; send it to the other clients on the server
                     if let Message::Text(_) = message {
-                        let buffer = get_buffer(message);
+                        //<editor-fold desc="One way, wait for each client before moving on to the next one">
+                        /*                        let buffer = get_buffer(message);
                         let connections = server_data.connections.lock().await;
 
                         for (_id, (_mpmc_channel, tcp_stream)) in connections.iter() {
@@ -29,9 +30,31 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                             // But remember; we are sending it through a mpmc channel
                             // In theory; this could be run in a hundred days.
                             // So writing to the tcp_stream which we don't need to clone it before sending and writing to tcp_stream is more performant.
+                            // Sending to a mpmc is really quick; though we do have to clone the buffer then which is slow.
                             // let _ = _mpmc_channel.send(buffer.clone()).await;
                             let _ = tcp_stream.to_owned().write_all(&buffer).await;
-                        }
+                        }*/
+                        //</editor-fold>
+                        // <editor-fold desc="Async way directly to the tcp_stream">
+                        let pinned_buffer = Arc::new(get_buffer(message));
+                        let connections = server_data.connections.lock().await;
+
+                        // Create all these tasks and then join them and wait for all of them to finish; instead of sending to one client at a time.
+                        let handles: Vec<_> = connections
+                            .iter()
+                            .map(|(_id, (_mpmc_channel, tcp_stream))| {
+                                let mut tcp_stream_owned = tcp_stream.clone();
+                                let pinned_buffer = pinned_buffer.clone();
+                                task::spawn(async move {
+                                    // Await the task so we make sure it's sent to the client.
+                                    let _ = tcp_stream_owned.write_all(&pinned_buffer).await;
+                                    Ok::<_, ()>(())
+                                })
+                            })
+                            .collect();
+
+                        let _ = futures::future::join_all(handles).await;
+                        // </editor-fold>
                     }
                 }
                 // Client unfortunately left the server. if you want you can notify the other clients on the server
