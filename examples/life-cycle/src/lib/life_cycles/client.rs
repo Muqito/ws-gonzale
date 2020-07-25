@@ -72,7 +72,6 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                     WsConnection::upgrade(connection, ConnectionEvents::new(server_sender.clone()))
                         .await?;
                 // You could loop over messages here like this instead of using ConnectionEvents
-                // My thinking is that if I someday wanted to branch out ws-common to a separate crate;
                 // WsClientHook couldn't just be implemented on WsConnection since they're both coming from the library.
                 /*                loop {
                     if let message = ws_connection.incoming_message().await? {
