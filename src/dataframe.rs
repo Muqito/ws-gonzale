@@ -1,4 +1,10 @@
-use crate::message::Message;
+use {
+    crate::{
+        WsGonzaleResult,
+        WsGonzaleError,
+        message::Message
+    },
+};
 
 #[inline(always)]
 pub fn get_buffer(message: Message) -> Vec<u8> {
@@ -76,12 +82,7 @@ pub struct Dataframe {
     masking_key: [u8; 4],
     payload: Vec<u8>,
 }
-#[derive(Debug, PartialEq)]
-pub enum DataframeBuilderError {
-    InvalidPayload,
-    ConnectionClosed,
-    Unknown,
-}
+
 pub enum Opcode {
     Continuation = 0,
     Text = 1,
@@ -90,13 +91,7 @@ pub enum Opcode {
     Pong = 10,
     Unknown,
 }
-impl From<DataframeBuilderError> for std::io::Error {
-    fn from(_frame: DataframeBuilderError) -> Self {
-        std::io::Error::from(std::io::ErrorKind::InvalidData)
-    }
-}
-// TODO(Christoffer): This is the one that's supposed to be AsyncResult and then rename it.
-type DataframeResult<T> = Result<T, DataframeBuilderError>;
+
 #[derive(Debug)]
 enum ExtraSize {
     Zero(u8),
@@ -115,7 +110,7 @@ mod frame_positions {
     pub const MASK_PAYLOAD_LENGTH: u8 = 0b01111111;
 }
 impl DataframeBuilder {
-    pub fn new(buffer: Vec<u8>) -> DataframeResult<Dataframe> {
+    pub fn new(buffer: Vec<u8>) -> WsGonzaleResult<Dataframe> {
         DataframeBuilder(buffer).get_dataframe()
     }
     #[inline(always)]
@@ -171,7 +166,7 @@ impl DataframeBuilder {
             .unwrap_or(0)
     }
     #[inline(always)]
-    fn get_extra_payload_bytes(&self) -> DataframeResult<ExtraSize> {
+    fn get_extra_payload_bytes(&self) -> WsGonzaleResult<ExtraSize> {
         let result = match self.get_short_payload_length() {
             size @ 0..=125 => ExtraSize::Zero(size),
             126 => ExtraSize::Two,
@@ -181,7 +176,7 @@ impl DataframeBuilder {
         Ok(result)
     }
     #[inline(always)]
-    fn get_payload_length(&self) -> DataframeResult<u64> {
+    fn get_payload_length(&self) -> WsGonzaleResult<u64> {
         let slice = self.0.as_slice();
         let result = match self.get_extra_payload_bytes()? {
             ExtraSize::Zero(size) => size as u64,
@@ -189,7 +184,7 @@ impl DataframeBuilder {
                 [_, _, first, second, ..] if slice.len() > 4 => {
                     u32::from_be_bytes([0, 0, *first, *second]) as u64
                 }
-                _ => return Err(DataframeBuilderError::Unknown),
+                _ => return Err(WsGonzaleError::Unknown),
             },
             ExtraSize::Eight => match slice {
                 [_, _, first, second, third, fourth, fifth, sixth, seventh, eighth, ..]
@@ -199,14 +194,14 @@ impl DataframeBuilder {
                         *first, *second, *third, *fourth, *fifth, *sixth, *seventh, *eighth,
                     ]) as u64
                 }
-                _ => return Err(DataframeBuilderError::Unknown),
+                _ => return Err(WsGonzaleError::Unknown),
             },
         };
 
         Ok(result)
     }
 
-    fn get_payload_start_pos(&self) -> DataframeResult<u64> {
+    fn get_payload_start_pos(&self) -> WsGonzaleResult<u64> {
         let result = match self.get_extra_payload_bytes()? {
             ExtraSize::Zero(_) => 6,
             ExtraSize::Two => 8,
@@ -214,13 +209,13 @@ impl DataframeBuilder {
         };
         Ok(result)
     }
-    pub fn get_full_frame_length(&self) -> DataframeResult<u64> {
+    pub fn get_full_frame_length(&self) -> WsGonzaleResult<u64> {
         let size = self.get_payload_start_pos()? + self.get_payload_length()?;
 
         Ok(size)
     }
     #[inline(always)]
-    fn get_masking_key_start(&self) -> DataframeResult<u8> {
+    fn get_masking_key_start(&self) -> WsGonzaleResult<u8> {
         let result = match self.get_extra_payload_bytes()? {
             ExtraSize::Zero(_) => 0,
             ExtraSize::Two => 2,
@@ -229,7 +224,7 @@ impl DataframeBuilder {
         Ok(result)
     }
     #[inline(always)]
-    fn get_masking_key(&self) -> DataframeResult<[u8; 4]> {
+    fn get_masking_key(&self) -> WsGonzaleResult<[u8; 4]> {
         let start = 2 + self.get_masking_key_start()? as usize;
         let end = start + 4;
         if self.is_mask() && self.0.len() >= end {
@@ -242,7 +237,7 @@ impl DataframeBuilder {
         }
     }
     #[inline(always)]
-    fn get_payload(mut self) -> DataframeResult<Vec<u8>> {
+    fn get_payload(mut self) -> WsGonzaleResult<Vec<u8>> {
         let start_payload = self.get_payload_start_pos()? as usize;
         let is_mask = self.is_mask();
         let masking_key = self.get_masking_key()?;
@@ -251,10 +246,10 @@ impl DataframeBuilder {
         // TODO: Make use of Opcode enum
         if self.get_opcode() == 8 {
             // TODO: Add support for reason message for closing
-            return Err(DataframeBuilderError::ConnectionClosed);
+            return Err(WsGonzaleError::ConnectionClosed);
         }
         if start_payload > self.0.len() {
-            return Err(DataframeBuilderError::InvalidPayload);
+            return Err(WsGonzaleError::InvalidPayload);
         }
         // Remove first {start_payload}:th bytes from dataframe payload
         self.0.drain(0..start_payload);
@@ -265,7 +260,7 @@ impl DataframeBuilder {
         Ok(data)
     }
     #[inline(always)]
-    fn get_dataframe(self) -> DataframeResult<Dataframe> {
+    fn get_dataframe(self) -> WsGonzaleResult<Dataframe> {
         let result = Dataframe {
             fin: self.is_fin(),
             rsv1: self.is_rsv1(),
@@ -283,17 +278,17 @@ impl DataframeBuilder {
 }
 impl Dataframe {
     #[inline(always)]
-    pub fn get_message(self) -> Option<Message> {
+    pub fn get_message(self) -> WsGonzaleResult<Message> {
         let result = match self.opcode {
             1 => Message::Text(
                 String::from_utf8_lossy(&self.get_payload())
                     .parse()
-                    .unwrap(),
+                    .map_err(|_| WsGonzaleError::InvalidPayload)?,
             ),
             8 => Message::Close,
-            _ => return None,
+            _ => Message::Unknown,
         };
-        Some(result)
+        Ok(result)
     }
     #[inline(always)]
     pub fn is_fin(&self) -> bool {
@@ -363,7 +358,7 @@ mod tests {
             0,
         ];
         let result = DataframeBuilder::new(buffer);
-        assert_eq!(result.err().unwrap(), DataframeBuilderError::InvalidPayload);
+        assert_eq!(result.err().unwrap(), WsGonzaleError::InvalidPayload);
     }
     #[test]
     fn test_close_frame_from_client() {
@@ -372,10 +367,7 @@ mod tests {
             128, // MASK(128)
         ];
         let result = DataframeBuilder::new(buffer);
-        assert_eq!(
-            result.err().unwrap(),
-            DataframeBuilderError::ConnectionClosed
-        );
+        assert_eq!(result.err().unwrap(), WsGonzaleError::ConnectionClosed);
     }
     #[test]
     fn test_buffer_with_no_payload_with_masking_key() {

@@ -1,5 +1,7 @@
 use {
-    crate::{dataframe, dataframe::get_buffer, handshake, message::Message, AsyncResult, Channel},
+    crate::{
+        dataframe, dataframe::get_buffer, handshake, message::Message, Channel, WsGonzaleResult,
+    },
     async_channel::Sender,
     async_net::TcpStream,
     async_std::task,
@@ -37,7 +39,7 @@ impl WsConnection {
     pub async fn upgrade(
         tcp_stream: TcpStream,
         client_hook: impl WsClientHook + Send + Sync + 'static,
-    ) -> AsyncResult<WsConnection> {
+    ) -> WsGonzaleResult<WsConnection> {
         let mut connection = WsConnection {
             tcp_stream,
             channel: async_channel::unbounded(),
@@ -52,20 +54,20 @@ impl WsConnection {
         Ok(connection)
     }
     /// Read incoming data packets from tcp stream
-    pub async fn incoming_message(&mut self) -> AsyncResult<Message> {
+    pub async fn incoming_message(&mut self) -> WsGonzaleResult<Message> {
         let mut buffer: [u8; 2] = [0; 2];
 
         // Do a peek-ahead so we can utilize the read_exact of the full payload and then use From<&[u8]> for Dataframe
         match self.tcp_stream.peek(&mut buffer).await {
             // Connection was aborted
             Ok(s) if s == 0 => {
-                return Err(std::io::Error::from(std::io::ErrorKind::ConnectionAborted))
+                return Err(std::io::Error::from(std::io::ErrorKind::ConnectionAborted))?;
             }
             // fin(126) + opcode for close(8), see rfc protocol.. just ignore the reason.
             Ok(_) if buffer.len() > 0 && buffer[0] == 136 => return Ok(Message::Close),
             Ok(_) => {}
             // Upon error, return early
-            Err(err) => return Err(err),
+            Err(err) => return Err(err)?,
         };
 
         // Just peek ahead for the largest data package 127 in size. That's 2 (two first frames including fin, rsv1-3, mask and payload_length) + 8 (u64 size in bytes) + 4 (masking_key) = 14
@@ -78,8 +80,7 @@ impl WsConnection {
         self.tcp_stream.read_exact(&mut payload).await?;
 
         let dataframe = dataframe::DataframeBuilder::new(payload)?;
-        // Unwrap since we already have a .or() in place. If no message or `Message::Unknown` just return `Message::Unknown`
-        let message = dataframe.get_message().or(Some(Message::Unknown)).unwrap();
+        let message = dataframe.get_message().unwrap_or(Message::Unknown);
 
         let _ = self.client_hook.on_message(&message).await;
 
