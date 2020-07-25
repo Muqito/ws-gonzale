@@ -1,39 +1,27 @@
 use {
-    crate::lib::server::{
-        ServerMessage,
-        ServerData
-    },
+    crate::lib::server::{ServerData, ServerMessage},
+    std::sync::atomic::{AtomicUsize, Ordering},
     ws_gonzale::{
-        Channels,
-        Server,
-        WsConnection,
-        WsClientHook,
-        Message,
-        futures::StreamExt,
-        async_std::{
-            task,
-            sync::Arc,
-            task::JoinHandle
-        },
         async_channel::Sender,
+        async_std::{sync::Arc, task, task::JoinHandle},
         async_trait::async_trait,
+        futures::StreamExt,
+        Channels, Message, Server, WsClientHook, WsConnection,
     },
-
-    std::sync::atomic::{AtomicUsize, Ordering}
 };
 static ID: AtomicUsize = AtomicUsize::new(1);
 
 struct ConnectionEvents {
     id: u32,
     server_sender: Sender<ServerMessage>,
-    channels: Option<Channels>
+    channels: Option<Channels>,
 }
 impl ConnectionEvents {
     pub fn new(server_sender: Sender<ServerMessage>) -> ConnectionEvents {
         Self {
             id: ID.fetch_add(1, Ordering::SeqCst) as u32,
             channels: None,
-            server_sender
+            server_sender,
         }
     }
     fn get_id(&self) -> u32 {
@@ -44,18 +32,27 @@ impl ConnectionEvents {
 impl WsClientHook for ConnectionEvents {
     async fn after_handshake(&mut self) -> Result<(), ()> {
         if let Some(channels) = self.channels.take() {
-            let _ = self.server_sender.send(ServerMessage::ClientJoined((self.get_id(), channels))).await;
+            let _ = self
+                .server_sender
+                .send(ServerMessage::ClientJoined((self.get_id(), channels)))
+                .await;
         }
         Ok(())
     }
 
     async fn after_drop(&self) -> Result<(), ()> {
-        let _ = self.server_sender.send(ServerMessage::ClientDisconnected(self.get_id())).await;
+        let _ = self
+            .server_sender
+            .send(ServerMessage::ClientDisconnected(self.get_id()))
+            .await;
         Ok(())
     }
 
     async fn on_message(&self, message: &Message) -> Result<(), ()> {
-        let _ = self.server_sender.send(ServerMessage::ClientMessage(message.clone().to_owned())).await;
+        let _ = self
+            .server_sender
+            .send(ServerMessage::ClientMessage(message.clone().to_owned()))
+            .await;
         Ok(())
     }
 
@@ -71,11 +68,13 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
         while let Some(Ok(connection)) = incoming.next().await {
             let server_sender = server_data.get_channel_sender();
             task::spawn(async move {
-                let mut ws_connection = WsConnection::upgrade(connection, ConnectionEvents::new(server_sender.clone())).await?;
+                let mut ws_connection =
+                    WsConnection::upgrade(connection, ConnectionEvents::new(server_sender.clone()))
+                        .await?;
                 // You could loop over messages here like this instead of using ConnectionEvents
                 // My thinking is that if I someday wanted to branch out ws-common to a separate crate;
                 // WsClientHook couldn't just be implemented on WsConnection since they're both coming from the library.
-/*                loop {
+                /*                loop {
                     if let message = ws_connection.incoming_message().await? {
                         dbg!(message);
                     }

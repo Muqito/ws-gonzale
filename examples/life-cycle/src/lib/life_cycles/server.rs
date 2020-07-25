@@ -1,22 +1,13 @@
 use {
-    crate::lib::{
-        server::{
-            ServerMessage,
-            ServerData
-        },
-    },
+    crate::lib::server::{ServerData, ServerMessage},
+    futures::AsyncWriteExt,
     ws_gonzale::{
-        Message,
-        get_buffer,
         async_std::{
-            task::{
-                self,
-                JoinHandle,
-            },
             sync::Arc,
+            task::{self, JoinHandle},
         },
+        get_buffer, Message,
     },
-    futures::{AsyncWriteExt}
 };
 
 /// Takes care of basic `server-lifecycle`
@@ -42,7 +33,7 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                             let _ = tcp_stream.to_owned().write_all(&buffer).await;
                         }
                     }
-                },
+                }
                 // Client unfortunately left the server. if you want you can notify the other clients on the server
                 ServerMessage::ClientDisconnected(id) => {
                     server_data.connections.lock().await.remove(&id);

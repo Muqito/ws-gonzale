@@ -5,5 +5,5 @@ pub enum Message {
     Ping(String),
     Pong(String),
     Close,
-    Unknown
+    Unknown,
 }

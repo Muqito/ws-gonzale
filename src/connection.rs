@@ -1,20 +1,10 @@
 use {
-    crate::{
-        Channel,
-        AsyncResult,
-        handshake,
-        dataframe,
-        message::Message,
-        dataframe::get_buffer,
-    },
+    crate::{dataframe, dataframe::get_buffer, handshake, message::Message, AsyncResult, Channel},
     async_channel::Sender,
     async_net::TcpStream,
     async_std::task,
     async_trait::async_trait,
-    futures::{
-        AsyncReadExt,
-        AsyncWriteExt,
-    },
+    futures::{AsyncReadExt, AsyncWriteExt},
 };
 
 pub type Channels = (Sender<Vec<u8>>, TcpStream);
@@ -38,20 +28,26 @@ pub struct WsConnection {
     channel: Channel<Vec<u8>>,
     /// Client hooks; we could do this in the life cycle; but I wanted the library to be as easily implemented as possible for end users.
     /// So we'll have to deal with wrapping this behind a pointer (Boxing it here) since we don't know the size of the struct developers will implement WsClientHook on.
-    client_hook: Box<dyn WsClientHook + Send + Sync>
+    client_hook: Box<dyn WsClientHook + Send + Sync>,
 }
 
 impl WsConnection {
     /// Upgrades the TcpStream to a WsConnection that's basically a handshake between a client and server
     /// and the connection is kept open.
-    pub async fn upgrade(tcp_stream: TcpStream, client_hook: impl WsClientHook + Send + Sync + 'static) -> AsyncResult<WsConnection> {
+    pub async fn upgrade(
+        tcp_stream: TcpStream,
+        client_hook: impl WsClientHook + Send + Sync + 'static,
+    ) -> AsyncResult<WsConnection> {
         let mut connection = WsConnection {
             tcp_stream,
             channel: async_channel::unbounded(),
             client_hook: Box::new(client_hook),
         };
         // Before returning the WsConnection; make sure the handshake is done.
-        connection.handshake().await.map_err(|_| std::io::Error::from(std::io::ErrorKind::Interrupted))?;
+        connection
+            .handshake()
+            .await
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::Interrupted))?;
 
         Ok(connection)
     }
@@ -62,12 +58,14 @@ impl WsConnection {
         // Do a peek-ahead so we can utilize the read_exact of the full payload and then use From<&[u8]> for Dataframe
         match self.tcp_stream.peek(&mut buffer).await {
             // Connection was aborted
-            Ok(s) if s == 0 => return Err(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)),
+            Ok(s) if s == 0 => {
+                return Err(std::io::Error::from(std::io::ErrorKind::ConnectionAborted))
+            }
             // fin(126) + opcode for close(8), see rfc protocol.. just ignore the reason.
             Ok(_) if buffer.len() > 0 && buffer[0] == 136 => return Ok(Message::Close),
-            Ok(_) => {},
+            Ok(_) => {}
             // Upon error, return early
-            Err(err) => return Err(err)
+            Err(err) => return Err(err),
         };
 
         // Just peek ahead for the largest data package 127 in size. That's 2 (two first frames including fin, rsv1-3, mask and payload_length) + 8 (u64 size in bytes) + 4 (masking_key) = 14
@@ -76,7 +74,6 @@ impl WsConnection {
 
         let dataframe = dataframe::DataframeBuilder::new(peeked_buff.to_vec()).unwrap();
         let mut payload: Vec<u8> = vec![0; dataframe.get_full_frame_length() as usize];
-
 
         self.tcp_stream.read_exact(&mut payload).await?;
 
@@ -101,7 +98,8 @@ impl WsConnection {
     /// Setup a reader of the multi producer and write to the underlying tcp_stream of our guest client.
     fn setup_listeners(&mut self) {
         // Send the WsWriter to this stream to the client hook
-        self.client_hook.set_channels((self.channel.0.clone(), self.tcp_stream.clone()));
+        self.client_hook
+            .set_channels((self.channel.0.clone(), self.tcp_stream.clone()));
 
         // Clone this because we are moving it into a new future which could be on another thread.
         let reader = self.channel.1.clone();
@@ -109,7 +107,9 @@ impl WsConnection {
         let mut tcp_stream = self.tcp_stream.clone();
         task::spawn(async move {
             // A nice welcome message once everything is setup, we are making sure this is the first thing the users see because of the await.
-            let _ = tcp_stream.write_all(&get_buffer(Message::Text("Welcome message!".to_string()))).await;
+            let _ = tcp_stream
+                .write_all(&get_buffer(Message::Text("Welcome message!".to_string())))
+                .await;
             while let Ok(buffer) = reader.recv().await {
                 let _ = tcp_stream.write_all(&buffer).await;
             }

@@ -1,14 +1,11 @@
 extern crate ws_gonzale;
 pub use {
-    ws_gonzale::{
-        AsyncResult,
-        async_std::sync::Arc,
-    },
-    crate::lib::server::{ServerData},
+    crate::lib::server::ServerData,
+    ws_gonzale::{async_std::sync::Arc, AsyncResult},
 };
 
-pub mod server;
 pub mod life_cycles;
+pub mod server;
 
 pub async fn start_server() -> AsyncResult<()> {
     let shared_data = Arc::new(ServerData::new());

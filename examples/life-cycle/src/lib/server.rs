@@ -1,28 +1,26 @@
 pub use {
-    ws_gonzale::{
-        Channels,
-        Channel,
-        Message,
-        async_channel::{self, Sender, Receiver},
-        async_std::sync::{Arc, Mutex},
-    },
     std::collections::HashMap,
+    ws_gonzale::{
+        async_channel::{self, Receiver, Sender},
+        async_std::sync::{Arc, Mutex},
+        Channel, Channels, Message,
+    },
 };
 
 pub enum ServerMessage {
     ClientMessage(Message),
     ClientJoined((u32, Channels)),
-    ClientDisconnected(u32)
+    ClientDisconnected(u32),
 }
 pub struct ServerData {
     channel: Channel<ServerMessage>,
-    pub connections: Arc<Mutex<HashMap<u32, Channels>>>
+    pub connections: Arc<Mutex<HashMap<u32, Channels>>>,
 }
 impl ServerData {
     pub fn new() -> Self {
         Self {
             channel: async_channel::unbounded(),
-            connections: Default::default()
+            connections: Default::default(),
         }
     }
     pub fn get_channel_receiver(&self) -> Receiver<ServerMessage> {

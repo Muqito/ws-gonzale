@@ -1,11 +1,11 @@
 use {
     crate::AsyncResult,
-    std::collections::HashMap,
-    futures::{AsyncWriteExt, AsyncReadExt},
-    sha1::Sha1,
-    base64::{encode},
-    std::string::ToString,
     async_net::TcpStream,
+    base64::encode,
+    futures::{AsyncReadExt, AsyncWriteExt},
+    sha1::Sha1,
+    std::collections::HashMap,
+    std::string::ToString,
 };
 
 const MAGIC_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -36,7 +36,7 @@ impl Headers {
                 let mut splits = val.split(": ");
                 match (splits.next(), splits.next()) {
                     (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                    _ => None
+                    _ => None,
                 }
             })
             .collect()
@@ -44,19 +44,20 @@ impl Headers {
 }
 
 pub struct Handshake {
-    headers: HashMap<String, String>
+    headers: HashMap<String, String>,
 }
 
 impl Handshake {
     pub fn new(headers: HashMap<String, String>) -> Self {
-        Self {
-            headers
-        }
+        Self { headers }
     }
     /// Quickly writes a response to the TcpStream with a valid `Sec-Websocket-Accept: {key}` if available
     pub async fn handshake(&mut self, sender: &mut TcpStream) -> AsyncResult<()> {
         let default_str = String::new();
-        let key = self.headers.get("Sec-WebSocket-Key").unwrap_or(&default_str);
+        let key = self
+            .headers
+            .get("Sec-WebSocket-Key")
+            .unwrap_or(&default_str);
         let accept_key = get_accept_from_key(&key).unwrap_or("".to_string());
         // Just a quick reply with the `Sec-Websocket-Accept: {key}`
         let returned_string = format!("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: {accept_key}\r\n\r\n", accept_key = accept_key);

@@ -1,6 +1,4 @@
-use {
-    crate::message::Message
-};
+use crate::message::Message;
 
 #[inline(always)]
 pub fn get_buffer(message: Message) -> Vec<u8> {
@@ -13,18 +11,18 @@ pub fn get_buffer(message: Message) -> Vec<u8> {
     match s.len() as u64 {
         size @ 0..=125 => {
             buffer.push(size as u8);
-        },
+        }
         size if size > u32::MAX as u64 => {
             let bytes: [u8; 8] = (size as u64).to_be_bytes();
             buffer.push(127);
             buffer.extend_from_slice(&bytes);
-        },
+        }
         size if size <= u32::MAX as u64 => {
             let bytes: [u8; 2] = (size as u16).to_be_bytes();
             buffer.push(126);
             buffer.extend_from_slice(&bytes);
-        },
-        _ => panic!("Don't know what to do here...")
+        }
+        _ => panic!("Don't know what to do here..."),
     }
     buffer.extend_from_slice(s.as_bytes());
     buffer
@@ -76,11 +74,11 @@ pub struct Dataframe {
     payload_length: u64,
     full_frame_length: u64,
     masking_key: [u8; 4],
-    payload: Vec<u8>
+    payload: Vec<u8>,
 }
 #[derive(Debug)]
 pub enum DataframeBuilderError {
-    Unknown
+    Unknown,
 }
 impl From<DataframeBuilderError> for std::io::Error {
     fn from(_frame: DataframeBuilderError) -> Self {
@@ -93,7 +91,7 @@ type DataframeResult<T> = Result<T, DataframeBuilderError>;
 enum ExtraSize {
     Zero(u8),
     Two,
-    Eight
+    Eight,
 }
 mod frame_positions {
     // Frame one
@@ -112,39 +110,60 @@ impl DataframeBuilder {
     }
     #[inline(always)]
     fn is_fin(&self) -> bool {
-        self.0.get(0).map(|frame| (frame & frame_positions::FIN) == frame_positions::FIN).unwrap_or(false)
+        self.0
+            .get(0)
+            .map(|frame| (frame & frame_positions::FIN) == frame_positions::FIN)
+            .unwrap_or(false)
     }
     #[inline(always)]
     fn is_rsv1(&self) -> bool {
-        self.0.get(0).map(|frame| (frame & frame_positions::RSV1) == frame_positions::RSV1).unwrap_or(false)
+        self.0
+            .get(0)
+            .map(|frame| (frame & frame_positions::RSV1) == frame_positions::RSV1)
+            .unwrap_or(false)
     }
     #[inline(always)]
     fn is_rsv2(&self) -> bool {
-        self.0.get(0).map(|frame| (frame & frame_positions::RSV2) == frame_positions::RSV2).unwrap_or(false)
+        self.0
+            .get(0)
+            .map(|frame| (frame & frame_positions::RSV2) == frame_positions::RSV2)
+            .unwrap_or(false)
     }
     #[inline(always)]
     fn is_rsv3(&self) -> bool {
-        self.0.get(0).map(|frame| (frame & frame_positions::RSV3) == frame_positions::RSV3).unwrap_or(false)
+        self.0
+            .get(0)
+            .map(|frame| (frame & frame_positions::RSV3) == frame_positions::RSV3)
+            .unwrap_or(false)
     }
     #[inline(always)]
     /// Get the last four bits in one byte in first frame
     fn get_opcode(&self) -> u8 {
         // default to close
-        self.0.get(0).map(|frame| frame & frame_positions::MASK_OPCODE).unwrap_or(8)
+        self.0
+            .get(0)
+            .map(|frame| frame & frame_positions::MASK_OPCODE)
+            .unwrap_or(8)
     }
     #[inline(always)]
     fn is_mask(&self) -> bool {
-        self.0.get(1).map(|frame| (frame & frame_positions::IS_MASK) == frame_positions::IS_MASK).unwrap_or(false)
+        self.0
+            .get(1)
+            .map(|frame| (frame & frame_positions::IS_MASK) == frame_positions::IS_MASK)
+            .unwrap_or(false)
     }
     /// Get the last seven bits in the byte in the second frame
     #[inline(always)]
     fn get_short_payload_length(&self) -> u8 {
-        self.0.get(1).map(|frame| frame & frame_positions::MASK_PAYLOAD_LENGTH).unwrap_or(0)
+        self.0
+            .get(1)
+            .map(|frame| frame & frame_positions::MASK_PAYLOAD_LENGTH)
+            .unwrap_or(0)
     }
     #[inline(always)]
     fn get_extra_payload_bytes(&self) -> DataframeResult<ExtraSize> {
         let result = match self.get_short_payload_length() {
-            size@ 0..=125 => ExtraSize::Zero(size),
+            size @ 0..=125 => ExtraSize::Zero(size),
             126 => ExtraSize::Two,
             127 => ExtraSize::Eight,
             _ => return Err(DataframeBuilderError::Unknown),
@@ -156,19 +175,22 @@ impl DataframeBuilder {
         let slice = self.0.as_slice();
         let result = match self.get_extra_payload_bytes()? {
             ExtraSize::Zero(size) => size as u64,
-            ExtraSize::Two => {
-                match slice {
-                    [_, _, first, second, ..] if slice.len() >= 4 => u32::from_be_bytes([0, 0, *first, *second]) as u64,
-                    _ => return Err(DataframeBuilderError::Unknown)
+            ExtraSize::Two => match slice {
+                [_, _, first, second, ..] if slice.len() >= 4 => {
+                    u32::from_be_bytes([0, 0, *first, *second]) as u64
                 }
+                _ => return Err(DataframeBuilderError::Unknown),
             },
-            ExtraSize::Eight => {
-                match slice {
-                    [_, _, first, second, third, fourth, fifth, sixth, seventh, eighth, ..] if slice.len() >= 8 => u64::from_be_bytes([*first, *second, *third, *fourth, *fifth, *sixth, *seventh, *eighth]) as u64,
-                    _ => return Err(DataframeBuilderError::Unknown)
+            ExtraSize::Eight => match slice {
+                [_, _, first, second, third, fourth, fifth, sixth, seventh, eighth, ..]
+                    if slice.len() >= 8 =>
+                {
+                    u64::from_be_bytes([
+                        *first, *second, *third, *fourth, *fifth, *sixth, *seventh, *eighth,
+                    ]) as u64
                 }
-
-            }
+                _ => return Err(DataframeBuilderError::Unknown),
+            },
         };
 
         Ok(result)
@@ -192,7 +214,7 @@ impl DataframeBuilder {
         let result = match self.get_extra_payload_bytes()? {
             ExtraSize::Zero(_) => 0,
             ExtraSize::Two => 2,
-            ExtraSize::Eight => 8
+            ExtraSize::Eight => 8,
         };
         Ok(result)
     }
@@ -244,7 +266,11 @@ impl Dataframe {
     #[inline(always)]
     pub fn get_message(self) -> Option<Message> {
         let result = match self.opcode {
-            1 => Message::Text(String::from_utf8_lossy(&self.get_payload()).parse().unwrap()),
+            1 => Message::Text(
+                String::from_utf8_lossy(&self.get_payload())
+                    .parse()
+                    .unwrap(),
+            ),
             8 => Message::Close,
             _ => return None,
         };
@@ -295,12 +321,19 @@ mod tests {
     #[test]
     fn test_buffer_hello_world() {
         let str = "Hello World";
-        let buffer: Vec<u8> = vec![129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18];
+        let buffer: Vec<u8> = vec![
+            129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         dbg!(&dataframe);
         assert!(dataframe.is_fin());
         assert!(dataframe.is_mask());
-        assert_eq!(String::from_utf8(dataframe.get_payload().to_vec()).unwrap().as_str(), str);
+        assert_eq!(
+            String::from_utf8(dataframe.get_payload().to_vec())
+                .unwrap()
+                .as_str(),
+            str
+        );
     }
     #[test]
     fn test_payload_size() {
@@ -312,14 +345,25 @@ mod tests {
 
     #[test]
     fn test_buffer_to_dataframe() {
-        let buffer: Vec<u8> = vec![129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18];
+        let buffer: Vec<u8> = vec![
+            129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         dbg!(dataframe);
     }
     #[test]
     fn test_buffer_126_length() {
         let str = "xZHtBeHbpCWCTCozNw0GxAdQ8Qqqtex5Zje8FBaVQpxrigx92BpLYYiXZnAA70CdNslWvgdSMz0vfUggF8U8wrULZz7ns1tUi5BDWmxx0XS5LsBeyFuaCq4NDAvwbi";
-        let buffer: Vec<u8> = vec![129,254,0,126,202,250,57,41,178,160,113,93,136,159,113,75,186,185,110,106,158,185,86,83,132,141,9,110,178,187,93,120,242,171,72,88,190,159,65,28,144,144,92,17,140,184,88,127,155,138,65,91,163,157,65,16,248,184,73,101,147,163,80,113,144,148,120,104,253,202,122,77,132,137,85,126,188,157,93,122,135,128,9,95,172,175,94,78,140,194,108,17,189,136,108,101,144,128,14,71,185,203,77,124,163,207,123,109,157,151,65,81,250,162,106,28,134,137,123,76,179,188,76,72,137,139,13,103,142,187,79,94,168,147];
+        let buffer: Vec<u8> = vec![
+            129, 254, 0, 126, 202, 250, 57, 41, 178, 160, 113, 93, 136, 159, 113, 75, 186, 185,
+            110, 106, 158, 185, 86, 83, 132, 141, 9, 110, 178, 187, 93, 120, 242, 171, 72, 88, 190,
+            159, 65, 28, 144, 144, 92, 17, 140, 184, 88, 127, 155, 138, 65, 91, 163, 157, 65, 16,
+            248, 184, 73, 101, 147, 163, 80, 113, 144, 148, 120, 104, 253, 202, 122, 77, 132, 137,
+            85, 126, 188, 157, 93, 122, 135, 128, 9, 95, 172, 175, 94, 78, 140, 194, 108, 17, 189,
+            136, 108, 101, 144, 128, 14, 71, 185, 203, 77, 124, 163, 207, 123, 109, 157, 151, 65,
+            81, 250, 162, 106, 28, 134, 137, 123, 76, 179, 188, 76, 72, 137, 139, 13, 103, 142,
+            187, 79, 94, 168, 147,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         let message = dataframe.get_message().unwrap();
         assert_eq!(message, Message::Text(str.to_string()));
@@ -327,7 +371,16 @@ mod tests {
     #[test]
     fn test_buffer_126_overflow_length() {
         let str = "xZHtBeHbpCWCTCozNw0GxAdQ8Qqqtex5Zje8FBaVQpxrigx92BpLYYiXZnAA70CdNslWvgdSMz0vfUggF8U8wrULZz7ns1tUi5BDWmxx0XS5LsBeyFuaCq4NDAvwbi";
-        let buffer: Vec<u8> = vec![129,254,0,126,202,250,57,41,178,160,113,93,136,159,113,75,186,185,110,106,158,185,86,83,132,141,9,110,178,187,93,120,242,171,72,88,190,159,65,28,144,144,92,17,140,184,88,127,155,138,65,91,163,157,65,16,248,184,73,101,147,163,80,113,144,148,120,104,253,202,122,77,132,137,85,126,188,157,93,122,135,128,9,95,172,175,94,78,140,194,108,17,189,136,108,101,144,128,14,71,185,203,77,124,163,207,123,109,157,151,65,81,250,162,106,28,134,137,123,76,179,188,76,72,137,139,13,103,142,187,79,94,168,147,0,0,0,0];
+        let buffer: Vec<u8> = vec![
+            129, 254, 0, 126, 202, 250, 57, 41, 178, 160, 113, 93, 136, 159, 113, 75, 186, 185,
+            110, 106, 158, 185, 86, 83, 132, 141, 9, 110, 178, 187, 93, 120, 242, 171, 72, 88, 190,
+            159, 65, 28, 144, 144, 92, 17, 140, 184, 88, 127, 155, 138, 65, 91, 163, 157, 65, 16,
+            248, 184, 73, 101, 147, 163, 80, 113, 144, 148, 120, 104, 253, 202, 122, 77, 132, 137,
+            85, 126, 188, 157, 93, 122, 135, 128, 9, 95, 172, 175, 94, 78, 140, 194, 108, 17, 189,
+            136, 108, 101, 144, 128, 14, 71, 185, 203, 77, 124, 163, 207, 123, 109, 157, 151, 65,
+            81, 250, 162, 106, 28, 134, 137, 123, 76, 179, 188, 76, 72, 137, 139, 13, 103, 142,
+            187, 79, 94, 168, 147, 0, 0, 0, 0,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         let message = dataframe.get_message().unwrap();
         assert_eq!(message, Message::Text(str.to_string()));
@@ -335,7 +388,16 @@ mod tests {
     #[test]
     fn test_buffer_127_length() {
         let str = "xZHtBeHbpCWCTCozNw0GxAdQ8Qqqtex5Zje8FBaVQpxrigx92BpLYYiXZnAA70CdNslWvgdSMz0vfUggF8U8wrULZz7ns1tUi5BDWmxx0XS5LsBeyFuaCq4NDAvwbia";
-        let buffer: Vec<u8> = vec![129, 254, 0, 127, 238, 233, 37, 50, 150, 179, 109, 70, 172, 140, 109, 80, 158, 170, 114, 113, 186, 170, 74, 72, 160, 158, 21, 117, 150, 168, 65, 99, 214, 184, 84, 67, 154, 140, 93, 7, 180, 131, 64, 10, 168, 171, 68, 100, 191, 153, 93, 64, 135, 142, 93, 11, 220, 171, 85, 126, 183, 176, 76, 106, 180, 135, 100, 115, 217, 217, 102, 86, 160, 154, 73, 101, 152, 142, 65, 97, 163, 147, 21, 68, 136, 188, 66, 85, 168, 209, 112, 10, 153, 155, 112, 126, 180, 147, 18, 92, 157, 216, 81, 103, 135, 220, 103, 118, 185, 132, 93, 74, 222, 177, 118, 7, 162, 154, 103, 87, 151, 175, 80, 83, 173, 152, 17, 124, 170, 168, 83, 69, 140, 128, 68];
+        let buffer: Vec<u8> = vec![
+            129, 254, 0, 127, 238, 233, 37, 50, 150, 179, 109, 70, 172, 140, 109, 80, 158, 170,
+            114, 113, 186, 170, 74, 72, 160, 158, 21, 117, 150, 168, 65, 99, 214, 184, 84, 67, 154,
+            140, 93, 7, 180, 131, 64, 10, 168, 171, 68, 100, 191, 153, 93, 64, 135, 142, 93, 11,
+            220, 171, 85, 126, 183, 176, 76, 106, 180, 135, 100, 115, 217, 217, 102, 86, 160, 154,
+            73, 101, 152, 142, 65, 97, 163, 147, 21, 68, 136, 188, 66, 85, 168, 209, 112, 10, 153,
+            155, 112, 126, 180, 147, 18, 92, 157, 216, 81, 103, 135, 220, 103, 118, 185, 132, 93,
+            74, 222, 177, 118, 7, 162, 154, 103, 87, 151, 175, 80, 83, 173, 152, 17, 124, 170, 168,
+            83, 69, 140, 128, 68,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         let message = dataframe.get_message().unwrap();
         assert_eq!(message, Message::Text(str.to_string()));
@@ -343,7 +405,16 @@ mod tests {
     #[test]
     fn test_buffer_127_overflow_length() {
         let str = "xZHtBeHbpCWCTCozNw0GxAdQ8Qqqtex5Zje8FBaVQpxrigx92BpLYYiXZnAA70CdNslWvgdSMz0vfUggF8U8wrULZz7ns1tUi5BDWmxx0XS5LsBeyFuaCq4NDAvwbia";
-        let buffer: Vec<u8> = vec![129, 254, 0, 127, 238, 233, 37, 50, 150, 179, 109, 70, 172, 140, 109, 80, 158, 170, 114, 113, 186, 170, 74, 72, 160, 158, 21, 117, 150, 168, 65, 99, 214, 184, 84, 67, 154, 140, 93, 7, 180, 131, 64, 10, 168, 171, 68, 100, 191, 153, 93, 64, 135, 142, 93, 11, 220, 171, 85, 126, 183, 176, 76, 106, 180, 135, 100, 115, 217, 217, 102, 86, 160, 154, 73, 101, 152, 142, 65, 97, 163, 147, 21, 68, 136, 188, 66, 85, 168, 209, 112, 10, 153, 155, 112, 126, 180, 147, 18, 92, 157, 216, 81, 103, 135, 220, 103, 118, 185, 132, 93, 74, 222, 177, 118, 7, 162, 154, 103, 87, 151, 175, 80, 83, 173, 152, 17, 124, 170, 168, 83, 69, 140, 128, 68, 0, 0, 0, 0];
+        let buffer: Vec<u8> = vec![
+            129, 254, 0, 127, 238, 233, 37, 50, 150, 179, 109, 70, 172, 140, 109, 80, 158, 170,
+            114, 113, 186, 170, 74, 72, 160, 158, 21, 117, 150, 168, 65, 99, 214, 184, 84, 67, 154,
+            140, 93, 7, 180, 131, 64, 10, 168, 171, 68, 100, 191, 153, 93, 64, 135, 142, 93, 11,
+            220, 171, 85, 126, 183, 176, 76, 106, 180, 135, 100, 115, 217, 217, 102, 86, 160, 154,
+            73, 101, 152, 142, 65, 97, 163, 147, 21, 68, 136, 188, 66, 85, 168, 209, 112, 10, 153,
+            155, 112, 126, 180, 147, 18, 92, 157, 216, 81, 103, 135, 220, 103, 118, 185, 132, 93,
+            74, 222, 177, 118, 7, 162, 154, 103, 87, 151, 175, 80, 83, 173, 152, 17, 124, 170, 168,
+            83, 69, 140, 128, 68, 0, 0, 0, 0,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         let message = dataframe.get_message().unwrap();
         assert_eq!(message, Message::Text(str.to_string()));
@@ -351,7 +422,18 @@ mod tests {
     #[test]
     fn test_buffer_large() {
         let str = "asdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadad";
-        let buffer: Vec<u8> = vec![129, 254, 0, 152, 156, 22, 133, 192, 253, 101, 225, 179, 253, 114, 228, 179, 248, 119, 246, 164, 253, 114, 246, 161, 248, 119, 225, 161, 239, 114, 246, 161, 248, 119, 246, 164, 253, 101, 225, 161, 248, 101, 228, 164, 253, 114, 228, 179, 248, 101, 228, 164, 253, 101, 225, 161, 239, 114, 228, 164, 239, 119, 225, 161, 248, 119, 246, 164, 239, 119, 225, 161, 239, 114, 228, 179, 248, 119, 225, 179, 253, 114, 228, 164, 253, 101, 225, 179, 253, 114, 228, 179, 248, 119, 246, 164, 253, 114, 246, 161, 248, 119, 225, 161, 239, 114, 246, 161, 248, 119, 246, 164, 253, 101, 225, 161, 248, 101, 228, 164, 253, 114, 228, 179, 248, 101, 228, 164, 253, 101, 225, 161, 239, 114, 228, 164, 239, 119, 225, 161, 248, 119, 246, 164, 239, 119, 225, 161, 239, 114, 228, 179, 248, 119, 225, 179, 253, 114, 228, 164];
+        let buffer: Vec<u8> = vec![
+            129, 254, 0, 152, 156, 22, 133, 192, 253, 101, 225, 179, 253, 114, 228, 179, 248, 119,
+            246, 164, 253, 114, 246, 161, 248, 119, 225, 161, 239, 114, 246, 161, 248, 119, 246,
+            164, 253, 101, 225, 161, 248, 101, 228, 164, 253, 114, 228, 179, 248, 101, 228, 164,
+            253, 101, 225, 161, 239, 114, 228, 164, 239, 119, 225, 161, 248, 119, 246, 164, 239,
+            119, 225, 161, 239, 114, 228, 179, 248, 119, 225, 179, 253, 114, 228, 164, 253, 101,
+            225, 179, 253, 114, 228, 179, 248, 119, 246, 164, 253, 114, 246, 161, 248, 119, 225,
+            161, 239, 114, 246, 161, 248, 119, 246, 164, 253, 101, 225, 161, 248, 101, 228, 164,
+            253, 114, 228, 179, 248, 101, 228, 164, 253, 101, 225, 161, 239, 114, 228, 164, 239,
+            119, 225, 161, 248, 119, 246, 164, 239, 119, 225, 161, 239, 114, 228, 179, 248, 119,
+            225, 179, 253, 114, 228, 164,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         let message = dataframe.get_message().unwrap();
         assert_eq!(message, Message::Text(str.to_string()));
@@ -359,7 +441,18 @@ mod tests {
     #[test]
     fn test_buffer_overflow_large() {
         let str = "asdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadadasdsadasdasdadsadad";
-        let buffer: Vec<u8> = vec![129, 254, 0, 152, 156, 22, 133, 192, 253, 101, 225, 179, 253, 114, 228, 179, 248, 119, 246, 164, 253, 114, 246, 161, 248, 119, 225, 161, 239, 114, 246, 161, 248, 119, 246, 164, 253, 101, 225, 161, 248, 101, 228, 164, 253, 114, 228, 179, 248, 101, 228, 164, 253, 101, 225, 161, 239, 114, 228, 164, 239, 119, 225, 161, 248, 119, 246, 164, 239, 119, 225, 161, 239, 114, 228, 179, 248, 119, 225, 179, 253, 114, 228, 164, 253, 101, 225, 179, 253, 114, 228, 179, 248, 119, 246, 164, 253, 114, 246, 161, 248, 119, 225, 161, 239, 114, 246, 161, 248, 119, 246, 164, 253, 101, 225, 161, 248, 101, 228, 164, 253, 114, 228, 179, 248, 101, 228, 164, 253, 101, 225, 161, 239, 114, 228, 164, 239, 119, 225, 161, 248, 119, 246, 164, 239, 119, 225, 161, 239, 114, 228, 179, 248, 119, 225, 179, 253, 114, 228, 164,0,0,0,0];
+        let buffer: Vec<u8> = vec![
+            129, 254, 0, 152, 156, 22, 133, 192, 253, 101, 225, 179, 253, 114, 228, 179, 248, 119,
+            246, 164, 253, 114, 246, 161, 248, 119, 225, 161, 239, 114, 246, 161, 248, 119, 246,
+            164, 253, 101, 225, 161, 248, 101, 228, 164, 253, 114, 228, 179, 248, 101, 228, 164,
+            253, 101, 225, 161, 239, 114, 228, 164, 239, 119, 225, 161, 248, 119, 246, 164, 239,
+            119, 225, 161, 239, 114, 228, 179, 248, 119, 225, 179, 253, 114, 228, 164, 253, 101,
+            225, 179, 253, 114, 228, 179, 248, 119, 246, 164, 253, 114, 246, 161, 248, 119, 225,
+            161, 239, 114, 246, 161, 248, 119, 246, 164, 253, 101, 225, 161, 248, 101, 228, 164,
+            253, 114, 228, 179, 248, 101, 228, 164, 253, 101, 225, 161, 239, 114, 228, 164, 239,
+            119, 225, 161, 248, 119, 246, 164, 239, 119, 225, 161, 239, 114, 228, 179, 248, 119,
+            225, 179, 253, 114, 228, 164, 0, 0, 0, 0,
+        ];
         let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
         let message = dataframe.get_message().unwrap();
         assert_eq!(message, Message::Text(str.to_string()));

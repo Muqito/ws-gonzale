@@ -1,11 +1,7 @@
 use {
+    criterion::{criterion_group, criterion_main, Criterion},
     hex::FromHex,
-    criterion::{
-        criterion_group,
-        criterion_main,
-        Criterion
-    },
-    ws_gonzale::dataframe::{super_mask, mask_payload_mut}
+    ws_gonzale::dataframe::{mask_payload_mut, super_mask},
 };
 
 fn unmasking_payload_mut(c: &mut Criterion) {
@@ -29,7 +25,9 @@ fn unmasking_payload_mut(c: &mut Criterion) {
 fn bench_dataframe(c: &mut Criterion) {
     let mut group = c.benchmark_group("Extract dataframe");
     group.bench_function("dataframe", |b| {
-        let buffer: Vec<u8> = vec![129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18];
+        let buffer: Vec<u8> = vec![
+            129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18,
+        ];
         b.iter(|| {
             let dataframe = ws_gonzale::DataframeBuilder::new(buffer.clone()).unwrap();
             dataframe.get_message().unwrap()
@@ -37,7 +35,6 @@ fn bench_dataframe(c: &mut Criterion) {
     });
     group.finish();
 }
-
 
 criterion_group!(benches, unmasking_payload_mut, bench_dataframe);
 criterion_main!(benches);
