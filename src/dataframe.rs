@@ -112,33 +112,34 @@ impl DataframeBuilder {
     }
     #[inline(always)]
     fn is_fin(&self) -> bool {
-        (&self.0[0] & frame_positions::FIN) == frame_positions::FIN
+        self.0.get(0).map(|frame| (frame & frame_positions::FIN) == frame_positions::FIN).unwrap_or(false)
     }
     #[inline(always)]
     fn is_rsv1(&self) -> bool {
-        (&self.0[0] & frame_positions::RSV1) == frame_positions::RSV1
+        self.0.get(0).map(|frame| (frame & frame_positions::RSV1) == frame_positions::RSV1).unwrap_or(false)
     }
     #[inline(always)]
     fn is_rsv2(&self) -> bool {
-        (&self.0[0] & frame_positions::RSV2) == frame_positions::RSV2
+        self.0.get(0).map(|frame| (frame & frame_positions::RSV2) == frame_positions::RSV2).unwrap_or(false)
     }
     #[inline(always)]
     fn is_rsv3(&self) -> bool {
-        (&self.0[0] & frame_positions::RSV3) == frame_positions::RSV3
+        self.0.get(0).map(|frame| (frame & frame_positions::RSV3) == frame_positions::RSV3).unwrap_or(false)
     }
     #[inline(always)]
     /// Get the last four bits in one byte in first frame
     fn get_opcode(&self) -> u8 {
-        (&self.0[0]) & frame_positions::MASK_OPCODE
+        // default to close
+        self.0.get(0).map(|frame| frame & frame_positions::MASK_OPCODE).unwrap_or(8)
     }
     #[inline(always)]
     fn is_mask(&self) -> bool {
-        (&self.0[1] & frame_positions::IS_MASK) == frame_positions::IS_MASK
+        self.0.get(1).map(|frame| (frame & frame_positions::IS_MASK) == frame_positions::IS_MASK).unwrap_or(false)
     }
     /// Get the last seven bits in the byte in the second frame
     #[inline(always)]
     fn get_short_payload_length(&self) -> u8 {
-        &self.0[1] & frame_positions::MASK_PAYLOAD_LENGTH
+        self.0.get(1).map(|frame| frame & frame_positions::MASK_PAYLOAD_LENGTH).unwrap_or(0)
     }
     #[inline(always)]
     fn get_extra_payload_bytes(&self) -> DataframeResult<ExtraSize> {
