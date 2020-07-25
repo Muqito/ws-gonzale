@@ -5,6 +5,21 @@ Right now it's just in it's most naive representation and the Wsframe reader isn
 
 I Also didn't want to just copy another framework.
 
+## Basic overview
+```
++--------+       +--------------+     +------+
+| Client |<----->| WsConnection |<----| MPMC |<-------<-------.
++--------+       +--------------+     +------+                |
+                                 \                            |
++--------+       +--------------+ \         +------+      +---+---------------+
+| Client |<----->| WsConnection |--*--->----| MPMC |-->->-| Server lifecycle  |
++--------+       +--------------+           +------+      +--------+----------+
+                                 \                       /
++--------+       +-----------+    \         +------+    /
+| Client |------>| handshake |     '---<-<--| MPMC |<--*
++--------+       |___________|              +------+
+```
+
 ## Checkout the example
 If you wanna run a simple WS server
 ```
