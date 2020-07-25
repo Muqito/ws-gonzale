@@ -76,8 +76,18 @@ pub struct Dataframe {
     masking_key: [u8; 4],
     payload: Vec<u8>,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum DataframeBuilderError {
+    InvalidPayload,
+    ConnectionClosed,
+    Unknown,
+}
+pub enum Opcode {
+    Continuation = 0,
+    Text = 1,
+    Close = 8,
+    Ping = 9,
+    Pong = 10,
     Unknown,
 }
 impl From<DataframeBuilderError> for std::io::Error {
@@ -166,7 +176,7 @@ impl DataframeBuilder {
             size @ 0..=125 => ExtraSize::Zero(size),
             126 => ExtraSize::Two,
             127 => ExtraSize::Eight,
-            _ => return Err(DataframeBuilderError::Unknown),
+            _ => unreachable!("Max payload for a dataframe in WS spec is 127"),
         };
         Ok(result)
     }
@@ -176,14 +186,14 @@ impl DataframeBuilder {
         let result = match self.get_extra_payload_bytes()? {
             ExtraSize::Zero(size) => size as u64,
             ExtraSize::Two => match slice {
-                [_, _, first, second, ..] if slice.len() >= 4 => {
+                [_, _, first, second, ..] if slice.len() > 4 => {
                     u32::from_be_bytes([0, 0, *first, *second]) as u64
                 }
                 _ => return Err(DataframeBuilderError::Unknown),
             },
             ExtraSize::Eight => match slice {
                 [_, _, first, second, third, fourth, fifth, sixth, seventh, eighth, ..]
-                    if slice.len() >= 8 =>
+                    if slice.len() > 8 =>
                 {
                     u64::from_be_bytes([
                         *first, *second, *third, *fourth, *fifth, *sixth, *seventh, *eighth,
@@ -221,23 +231,32 @@ impl DataframeBuilder {
     #[inline(always)]
     fn get_masking_key(&self) -> DataframeResult<[u8; 4]> {
         let start = 2 + self.get_masking_key_start()? as usize;
-        if self.0.len() < (start + 4) {
-            return Err(DataframeBuilderError::Unknown);
+        let end = start + 4;
+        if self.is_mask() && self.0.len() >= end {
+            let mut buffer: [u8; 4] = [0; 4];
+            buffer.copy_from_slice(&self.0[start..end]);
+            Ok(buffer)
+        } else {
+            // masking key [0, 0, 0, 0] is ok because 1 ^ 0 == 1, 0 ^ 0 == 0
+            Ok([0, 0, 0, 0])
         }
-        let mut buffer: [u8; 4] = [0; 4];
-        buffer.copy_from_slice(&self.0[start..start + 4]);
-        Ok(buffer)
     }
     #[inline(always)]
     fn get_payload(mut self) -> DataframeResult<Vec<u8>> {
         let start_payload = self.get_payload_start_pos()? as usize;
-        if start_payload > self.0.len() {
-            return Err(DataframeBuilderError::Unknown);
-        }
         let is_mask = self.is_mask();
         let masking_key = self.get_masking_key()?;
         let payload_length = self.get_payload_length()? as usize;
 
+        // TODO: Make use of Opcode enum
+        if self.get_opcode() == 8 {
+            // TODO: Add support for reason message for closing
+            return Err(DataframeBuilderError::ConnectionClosed);
+        }
+        if start_payload > self.0.len() {
+            return Err(DataframeBuilderError::InvalidPayload);
+        }
+        // Remove first {start_payload}:th bytes from dataframe payload
         self.0.drain(0..start_payload);
         let mut data = self.0.into_iter().take(payload_length).collect::<Vec<u8>>();
         if is_mask {
@@ -317,7 +336,57 @@ impl Dataframe {
 mod tests {
     use super::*;
     use crate::message::Message;
-
+    #[test]
+    #[should_panic]
+    fn test_buffer_with_no_payload_or_masking_key_but_payload_length() {
+        let buffer: Vec<u8> = vec![
+            129, // FIN(128) + Opcode(1)
+            129, // MASK(128) + PayloadLength(1)
+        ];
+        let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
+        dataframe.get_message().unwrap();
+    }
+    #[test]
+    fn test_buffer_with_no_payload_but_masking_key_and_payload_length() {
+        let buffer: Vec<u8> = vec![
+            129, // FIN(128) + Opcode(1)
+            129, // MASK(128) + PayloadLength(1)
+            0, 0, 0, 0,
+        ];
+        let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
+        dataframe.get_message().unwrap();
+    }
+    #[test]
+    fn test_buffer_with_no_payload_or_mask() {
+        let buffer: Vec<u8> = vec![
+            129, // FIN(128) + Opcode(1)
+            0,
+        ];
+        let result = DataframeBuilder::new(buffer);
+        assert_eq!(result.err().unwrap(), DataframeBuilderError::InvalidPayload);
+    }
+    #[test]
+    fn test_close_frame_from_client() {
+        let buffer: Vec<u8> = vec![
+            136, // FIN(128) + Opcode(8)
+            128, // MASK(128)
+        ];
+        let result = DataframeBuilder::new(buffer);
+        assert_eq!(
+            result.err().unwrap(),
+            DataframeBuilderError::ConnectionClosed
+        );
+    }
+    #[test]
+    fn test_buffer_with_no_payload_with_masking_key() {
+        let buffer: Vec<u8> = vec![
+            129, // FIN(128) + Opcode(1)
+            128, // MASK(128)
+            0, 0, 0, 0,
+        ];
+        let dataframe: Dataframe = DataframeBuilder::new(buffer).unwrap();
+        dataframe.get_message().unwrap();
+    }
     #[test]
     fn test_buffer_hello_world() {
         let str = "Hello World";
