@@ -1,10 +1,4 @@
-use {
-    crate::{
-        WsGonzaleResult,
-        WsGonzaleError,
-        message::Message
-    },
-};
+use crate::{message::Message, WsGonzaleError, WsGonzaleResult};
 
 #[inline(always)]
 pub fn get_buffer(message: Message) -> Vec<u8> {
@@ -82,7 +76,7 @@ pub struct Dataframe {
     masking_key: [u8; 4],
     payload: Vec<u8>,
 }
-
+#[derive(PartialEq)]
 pub enum Opcode {
     Continuation = 0,
     Text = 1,
@@ -90,6 +84,18 @@ pub enum Opcode {
     Ping = 9,
     Pong = 10,
     Unknown,
+}
+impl From<u8> for Opcode {
+    fn from(v: u8) -> Opcode {
+        match v {
+            0 => Opcode::Continuation,
+            1 => Opcode::Text,
+            8 => Opcode::Close,
+            9 => Opcode::Ping,
+            10 => Opcode::Pong,
+            _ => Opcode::Unknown,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -243,8 +249,7 @@ impl DataframeBuilder {
         let masking_key = self.get_masking_key()?;
         let payload_length = self.get_payload_length()? as usize;
 
-        // TODO: Make use of Opcode enum
-        if self.get_opcode() == 8 {
+        if Opcode::from(self.get_opcode()) == Opcode::Close {
             // TODO: Add support for reason message for closing
             return Err(WsGonzaleError::ConnectionClosed);
         }
