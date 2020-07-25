@@ -28,36 +28,11 @@ pub fn get_buffer(message: Message) -> Vec<u8> {
     buffer
 }
 #[inline(always)]
-pub fn super_mask<'a, 'b>(incoming: &'a mut &'b mut [u8], mask: [u8; 4]) -> &'a [u8] {
+/// This masks the payload byte by byte and does a bitwise exclusive on index % 4 of mask
+pub fn mask_payload<'a, 'b>(incoming: &'a mut &'b mut [u8], mask: [u8; 4]) -> &'a [u8] {
     let data: &'b mut [u8] = std::mem::take(incoming);
     for i in 0..data.len() {
         data[i] ^= mask[i % 4];
-    }
-    data
-}
-#[inline(always)]
-/// This is our most performant masking of a &[u8], though it requires exclusive access to the data.
-pub fn mask_payload_mut(data: &mut [u8], mask: [u8; 4]) -> &[u8] {
-    for i in 0..data.len() {
-        let mask_key = mask[(i % 4) as usize];
-        data[i] ^= mask_key;
-    }
-    data
-}
-#[inline(always)]
-pub fn mask_payload(data: &[u8], mask: [u8; 4]) -> Vec<u8> {
-    let mut data = data.to_vec();
-    for i in 0..data.len() {
-        let mask_key = mask[(i % 4) as usize];
-        data[i] ^= mask_key;
-    }
-    data
-}
-#[inline(always)]
-pub fn mask_payload_vec(mut data: Vec<u8>, mask: [u8; 4]) -> Vec<u8> {
-    for i in 0..data.len() {
-        let mask_key = mask[(i % 4) as usize];
-        data[i] ^= mask_key;
     }
     data
 }
@@ -260,7 +235,7 @@ impl DataframeBuilder {
         self.0.drain(0..start_payload);
         let mut data = self.0.into_iter().take(payload_length).collect::<Vec<u8>>();
         if is_mask {
-            super_mask(&mut &mut *data, masking_key);
+            mask_payload(&mut &mut *data, masking_key);
         }
         Ok(data)
     }
