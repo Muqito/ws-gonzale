@@ -87,6 +87,7 @@ impl From<DataframeBuilderError> for std::io::Error {
         std::io::Error::from(std::io::ErrorKind::InvalidData)
     }
 }
+// TODO(Christoffer): This is the one that's supposed to be AsyncResult and then rename it.
 type DataframeResult<T> = Result<T, DataframeBuilderError>;
 #[derive(Debug)]
 enum ExtraSize {
@@ -94,39 +95,50 @@ enum ExtraSize {
     Two,
     Eight
 }
+mod frame_positions {
+    // Frame one
+    pub const FIN: u8 = 128;
+    pub const RSV1: u8 = 64;
+    pub const RSV2: u8 = 32;
+    pub const RSV3: u8 = 16;
+    pub const MASK_OPCODE: u8 = 0b00001111;
+    // Frame two
+    pub const IS_MASK: u8 = 128;
+    pub const MASK_PAYLOAD_LENGTH: u8 = 0b01111111;
+}
 impl DataframeBuilder {
     pub fn new(buffer: Vec<u8>) -> DataframeResult<Dataframe> {
         DataframeBuilder(buffer).get_dataframe()
     }
     #[inline(always)]
     fn is_fin(&self) -> bool {
-        (&self.0[0] & 128) == 128
+        (&self.0[0] & frame_positions::FIN) == frame_positions::FIN
     }
     #[inline(always)]
     fn is_rsv1(&self) -> bool {
-        (&self.0[0] & 64) == 64
+        (&self.0[0] & frame_positions::RSV1) == frame_positions::RSV1
     }
     #[inline(always)]
     fn is_rsv2(&self) -> bool {
-        (&self.0[0] & 32) == 32
+        (&self.0[0] & frame_positions::RSV2) == frame_positions::RSV2
     }
     #[inline(always)]
     fn is_rsv3(&self) -> bool {
-        (&self.0[0] & 16) == 16
+        (&self.0[0] & frame_positions::RSV3) == frame_positions::RSV3
     }
     #[inline(always)]
     /// Get the last four bits in one byte in first frame
     fn get_opcode(&self) -> u8 {
-        (&self.0[0]) & 0b00001111
+        (&self.0[0]) & frame_positions::MASK_OPCODE
     }
     #[inline(always)]
     fn is_mask(&self) -> bool {
-        (&self.0[1] & 128) == 128
+        (&self.0[1] & frame_positions::IS_MASK) == frame_positions::IS_MASK
     }
     /// Get the last seven bits in the byte in the second frame
     #[inline(always)]
     fn get_short_payload_length(&self) -> u8 {
-        &self.0[1] & 0b01111111
+        &self.0[1] & frame_positions::MASK_PAYLOAD_LENGTH
     }
     #[inline(always)]
     fn get_extra_payload_bytes(&self) -> DataframeResult<ExtraSize> {
