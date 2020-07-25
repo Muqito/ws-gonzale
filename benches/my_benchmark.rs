@@ -28,7 +28,7 @@ fn unmasking_payload_mut(c: &mut Criterion) {
 }
 fn bench_dataframe(c: &mut Criterion) {
     let mut group = c.benchmark_group("Extract dataframe");
-    group.bench_function("dataframe::supra", |b| {
+    group.bench_function("dataframe", |b| {
         let buffer: Vec<u8> = vec![129, 139, 90, 212, 118, 181, 18, 177, 26, 217, 53, 244, 33, 218, 40, 184, 18];
         b.iter(|| {
             let dataframe = ws_gonzale::DataframeBuilder::new(buffer.clone()).unwrap();
