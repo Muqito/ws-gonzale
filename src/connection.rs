@@ -124,6 +124,6 @@ impl WsConnection {
 impl Drop for WsConnection {
     fn drop(&mut self) {
         // Block this thread until notified since Drop doesn't support async
-        let _ = async_std::task::block_on(self.client_hook.after_drop());
+        let _ = task::block_on(self.client_hook.after_drop());
     }
 }
