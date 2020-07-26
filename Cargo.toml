@@ -1,6 +1,6 @@
 [package]
 name = "ws-gonzale"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Christoffer Lantz <christoffer.lantz@filmskaparna.se>"]
 edition = "2018"
 description = "Naive websocket server implemented using async / await"
