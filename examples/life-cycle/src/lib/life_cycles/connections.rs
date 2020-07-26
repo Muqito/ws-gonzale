@@ -69,7 +69,7 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
             let server_sender = server_data.get_channel_sender();
             task::spawn(async move {
                 let mut ws_connection =
-                    WsConnection::upgrade(connection, ConnectionEvents::new(server_sender.clone()))
+                    WsConnection::upgrade(connection, ConnectionEvents::new(server_sender))
                         .await?;
                 // You could loop over messages here like this instead of using ConnectionEvents
                 // WsClientHook couldn't just be implemented on WsConnection since they're both coming from the library.
