@@ -88,7 +88,7 @@ impl WsConnection {
         Ok(message)
     }
     async fn handshake(&mut self) -> Result<(), std::io::Error> {
-        let _ = handshake::handshake(&mut self.tcp_stream).await;
+        let _ = handshake::read_and_handshake(&mut self.tcp_stream).await;
         // After handshake, notify WsClientHook struct that a handshake has been successful.
         // Also pass a long a multi-producer `Sender<Vec<u8>>` so we can receive data from outside this lib.
         self.setup_listeners();

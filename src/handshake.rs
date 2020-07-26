@@ -25,11 +25,17 @@ fn get_accept_from_key(key: &str) -> Result<String, String> {
     Ok(encode(sha1_accept_key))
 }
 
-struct Headers;
+pub struct Headers(HashMap<String, String>);
 
 impl Headers {
-    fn from_buffer(buffers: &[u8]) -> HashMap<String, String> {
-        String::from_utf8_lossy(&buffers)
+    pub fn new(headers: HashMap<String, String>) -> Self {
+        Self(headers)
+    }
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.0.get(key)
+    }
+    pub fn from_buffer(buffers: &[u8]) -> Self {
+        let headers: HashMap<String, String> = String::from_utf8_lossy(&buffers)
             .split("\r\n")
             .filter(|s| !s.is_empty())
             .flat_map(|val| {
@@ -39,38 +45,25 @@ impl Headers {
                     _ => None,
                 }
             })
-            .collect()
+            .collect();
+
+        Headers::new(headers)
     }
 }
-
-struct Handshake {
-    headers: HashMap<String, String>,
-}
-
-impl Handshake {
-    fn new(headers: HashMap<String, String>) -> Self {
-        Self { headers }
-    }
-    /// Quickly writes a response to the TcpStream with a valid `Sec-Websocket-Accept: {key}` if available
-    async fn handshake(&mut self, sender: &mut TcpStream) -> AsyncResult<()> {
-        let default_str = String::new();
-        let key = self
-            .headers
-            .get("Sec-WebSocket-Key")
-            .unwrap_or(&default_str);
-        let accept_key = get_accept_from_key(&key).unwrap_or("".to_string());
-        // Just a quick reply with the `Sec-Websocket-Accept: {key}`
-        let returned_string = format!("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: {accept_key}\r\n\r\n", accept_key = accept_key);
-        sender.write_all(returned_string.as_bytes()).await?; // Accept the connection
-        Ok(())
-    }
+/// Quickly writes a response to the TcpStream with a valid `Sec-Websocket-Accept: {key}` if available
+pub async fn handshake(headers: Headers, tcp_stream: &mut TcpStream) -> AsyncResult<()> {
+    let default_str = String::new();
+    let key = headers.get("Sec-WebSocket-Key").unwrap_or(&default_str);
+    let accept_key = get_accept_from_key(&key).unwrap_or("".to_string());
+    // Just a quick reply with the `Sec-Websocket-Accept: {key}`
+    let returned_string = format!("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: {accept_key}\r\n\r\n", accept_key = accept_key);
+    tcp_stream.write_all(returned_string.as_bytes()).await?; // Accept the connection
+    Ok(())
 }
 /// Upgrades the incoming GET request to a keep-open WebSocket connection
-pub async fn handshake(mut stream: &mut TcpStream) -> AsyncResult<()> {
+pub async fn read_and_handshake(tcp_stream: &mut TcpStream) -> AsyncResult<()> {
     let mut buffers: Vec<u8> = vec![0u8; 1000];
-    stream.read(&mut buffers).await?;
-    let headers: HashMap<String, String> = Headers::from_buffer(&buffers);
-    let mut upgrade_header = Handshake::new(headers);
-    upgrade_header.handshake(&mut stream).await?;
-    Ok(())
+    tcp_stream.read(&mut buffers).await?;
+    let headers = Headers::from_buffer(&buffers);
+    handshake(headers, tcp_stream).await
 }
