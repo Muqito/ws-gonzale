@@ -107,9 +107,9 @@ impl Request {
         let mut request = s.lines().collect::<Vec<&str>>();
         let empty_index = request.iter().position(|s| s.is_empty());
 
-        let mut body = String::new();
+        let mut body: Option<Body> = None;
         if let Some(empty_index) = empty_index {
-            body = request.split_off(empty_index).join("");
+            body = Some(Body(request.split_off(empty_index).join("")));
         }
 
         let mut iters = request.iter();
@@ -133,11 +133,11 @@ impl Request {
             Headers::new(headers)
         };
 
-        let data = if empty_index.is_some() && endpoint.method != Method::GET {
+        let data = if endpoint.method == Method::POST && body.is_some() {
             Request {
                 endpoint,
                 headers,
-                body: Some(Body(body)),
+                body,
             }
         } else {
             Request {
