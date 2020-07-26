@@ -130,7 +130,7 @@ impl WsConnection {
         let mut peeked_buff: [u8; 14] = [0; 14];
         self.0.peek(&mut peeked_buff).await?;
 
-        let dataframe = dataframe::DataframeBuilder::new(peeked_buff.to_vec()).unwrap();
+        let dataframe = dataframe::DataframeBuilder::new(peeked_buff.to_vec())?;
         let mut payload: Vec<u8> = vec![0; dataframe.get_full_frame_length() as usize];
 
         self.0.read_exact(&mut payload).await?;

@@ -36,32 +36,6 @@ impl Headers {
     pub fn get(&self, key: &str) -> Option<&String> {
         self.0.get(key)
     }
-    pub fn from_buffer(buffers: &[u8]) -> Self {
-        let request: Vec<String> = String::from_utf8_lossy(buffers)
-            .splitn(2, "\r\n\r\n")
-            .map(|s| s.to_string())
-            .collect();
-        let headers: HashMap<String, String> = request
-            .get(0)
-            .unwrap()
-            .split("\r\n")
-            .filter(|s| !s.is_empty())
-            .flat_map(|val| {
-                let mut splits = val.splitn(2, ": ");
-                match (splits.next(), splits.next()) {
-                    (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                    _ => None,
-                }
-            })
-            .collect();
-
-        Headers::new(headers)
-    }
-    pub async fn read_from_stream(tcp_stream: &mut TcpStream) -> AsyncResult<Headers> {
-        let mut buffers: Vec<u8> = vec![0u8; 1000];
-        tcp_stream.read(&mut buffers).await?;
-        Ok(Headers::from_buffer(&buffers))
-    }
 }
 /// Quickly writes a response to the TcpStream with a valid `Sec-Websocket-Accept: {key}` if available
 pub async fn handshake(key: &str, tcp_stream: &mut TcpStream) -> AsyncResult<()> {
@@ -134,8 +108,8 @@ impl Request {
         let empty_index = request.iter().position(|s| s.is_empty());
 
         let mut body = String::new();
-        if empty_index.is_some() {
-            body = request.split_off(empty_index.unwrap()).join("");
+        if let Some(empty_index) = empty_index {
+            body = request.split_off(empty_index).join("");
         }
 
         let mut iters = request.iter();
