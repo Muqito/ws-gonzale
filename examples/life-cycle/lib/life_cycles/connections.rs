@@ -1,3 +1,4 @@
+use futures::AsyncWriteExt;
 use {
     crate::lib::server::{ServerData, ServerMessage},
     std::sync::atomic::{AtomicUsize, Ordering},
@@ -6,7 +7,7 @@ use {
         async_std::{sync::Arc, task, task::JoinHandle},
         async_trait::async_trait,
         futures::StreamExt,
-        Channels, Headers, Message, Server, WsClientHook, WsConnection, WsEvents,
+        Channels, Message, Method, Request, Server, WsClientHook, WsConnection, WsEvents,
     },
 };
 
@@ -67,20 +68,54 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
         let server = Server::new("127.0.0.1:8080").await?;
         let mut incoming = server.incoming();
         while let Some(Ok(mut connection)) = incoming.next().await {
+            let time = std::time::Instant::now();
             let server_sender = server_data.get_channel_sender();
+            let post_sender = server_data.get_channel_sender();
             task::spawn(async move {
                 // We extracted out TcpStream read from WsConnection so we can be more flexible in the implementation
-                let default_str = String::new();
-                let headers = Headers::read_from_stream(&mut connection).await?;
-                let key = headers.get("Sec-WebSocket-Key").unwrap_or(&default_str);
+                let request = Request::read_from_stream(&mut connection).await?;
+                match request.get_endpoint().get_method() {
+                    Method::GET
+                        if request
+                            .get_headers()
+                            .get("Upgrade")
+                            .map(|s| s.to_string().to_ascii_lowercase())
+                            == Some(String::from("websocket")) =>
+                    {
+                        let default_str = String::new();
+                        let key = request
+                            .get_headers()
+                            .get("Sec-WebSocket-Key")
+                            .unwrap_or(&default_str);
 
-                // Upgrade to WS connection because the run cycle and reading dataframes assumes a WSConnection
-                let ws_connection = WsConnection::upgrade(connection, key).await?;
+                        // Upgrade to WS connection because the run cycle and reading dataframes assumes a WSConnection
+                        let ws_connection = WsConnection::upgrade(connection, key).await?;
 
-                // Run cycle
-                let ws_events =
-                    WsEvents::new(ws_connection, ConnectionEvents::new(server_sender)).await?;
-                let _ = ws_events.run().await?;
+                        // Run cycle
+                        let ws_events =
+                            WsEvents::new(ws_connection, ConnectionEvents::new(server_sender))
+                                .await?;
+                        let _ = ws_events.run().await?;
+                    }
+                    // Simple POST message to all clients on the server
+                    Method::POST => {
+                        if let Some(body) = request.get_body() {
+                            let send_data = body.get_body();
+                            let _ = post_sender
+                                .send(ServerMessage::ClientMessage(Message::Text(
+                                    send_data.to_string(),
+                                )))
+                                .await;
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\n\r\n{send_data}",
+                                send_data = send_data,
+                                microseconds = time.elapsed().as_micros()
+                            );
+                            let _ = connection.write_all(response.as_bytes()).await;
+                        }
+                    }
+                    _ => {}
+                }
                 Ok::<_, std::io::Error>(())
             });
         }
