@@ -69,6 +69,17 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                 // Welcome my dear friend; someone has joined our beloved server
                 ServerMessage::ClientJoined((id, channels)) => {
                     server_data.connections.lock().await.insert(id, channels);
+
+                    // A nice welcome message once everything is setup, we are making sure this is the first thing the users see because of the await.
+                    if let Some((_mpmc, tcp_stream)) =
+                        server_data.connections.lock().await.get_mut(&id)
+                    {
+                        let _ = tcp_stream
+                            .write_all(&get_buffer(Message::Text(
+                                "Welcome to the server!".to_string(),
+                            )))
+                            .await;
+                    };
                     /*                    let total = server_data.get_nr_of_connections().await;
                     println!("Client: {} joined, current total: {}", id, total);*/
                 }

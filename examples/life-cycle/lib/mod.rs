@@ -17,7 +17,9 @@ pub async fn start_server() -> AsyncResult<()> {
     let tm_shared_data = Arc::clone(&shared_data);
     let thread_server = life_cycles::server(tm_shared_data);
     //</editor-fold>
-    let _ = futures::try_join!(thread_connections, thread_server);
+    if let Err(err) = futures::try_join!(thread_connections, thread_server) {
+        return Err(err);
+    }
 
     Ok(())
 }

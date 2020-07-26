@@ -1,7 +1,5 @@
 use {
-    crate::{
-        dataframe, dataframe::get_buffer, handshake, message::Message, Channel, WsGonzaleResult,
-    },
+    crate::{dataframe, handshake, message::Message, Channel, WsGonzaleResult},
     async_channel::Sender,
     async_net::TcpStream,
     async_std::task,
@@ -71,10 +69,6 @@ impl WsEvents {
         let mut tcp_stream_writer = self.ws_connection.get_tcp_stream();
 
         task::spawn(async move {
-            // A nice welcome message once everything is setup, we are making sure this is the first thing the users see because of the await.
-            let _ = tcp_stream_writer
-                .write_all(&get_buffer(Message::Text("Welcome message!".to_string())))
-                .await;
             while let Ok(buffer) = channel_reader.recv().await {
                 let _ = tcp_stream_writer.write_all(&buffer).await;
             }
