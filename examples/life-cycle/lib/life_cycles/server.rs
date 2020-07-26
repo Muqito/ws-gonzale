@@ -61,13 +61,16 @@ pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Er
                 ServerMessage::ClientDisconnected(id) => {
                     server_data.connections.lock().await.remove(&id);
                     let total = server_data.get_nr_of_connections().await;
-                    println!("Client: {} left, current total: {}", id, total);
+                    // println!("Client: {} left, current total: {}", id, total);
+                    if total == 0 {
+                        println!("Server is now empty of clients");
+                    }
                 }
                 // Welcome my dear friend; someone has joined our beloved server
                 ServerMessage::ClientJoined((id, channels)) => {
                     server_data.connections.lock().await.insert(id, channels);
-                    let total = server_data.get_nr_of_connections().await;
-                    println!("Client: {} joined, current total: {}", id, total);
+                    /*                    let total = server_data.get_nr_of_connections().await;
+                    println!("Client: {} joined, current total: {}", id, total);*/
                 }
             }
         }

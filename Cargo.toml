@@ -30,4 +30,4 @@ harness = false
 
 [[example]]
 name = "life-cycle"
-path = "examples/life-cycle/src/main.rs"
+path = "examples/life-cycle/main.rs"
