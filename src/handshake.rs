@@ -1,11 +1,7 @@
+use futures::AsyncReadExt;
 use {
-    crate::AsyncResult,
-    async_net::TcpStream,
-    base64::encode,
-    futures::{AsyncReadExt, AsyncWriteExt},
-    sha1::Sha1,
-    std::collections::HashMap,
-    std::string::ToString,
+    crate::AsyncResult, async_net::TcpStream, base64::encode, futures::AsyncWriteExt, sha1::Sha1,
+    std::collections::HashMap, std::string::ToString,
 };
 
 const MAGIC_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -49,21 +45,17 @@ impl Headers {
 
         Headers::new(headers)
     }
+    pub async fn read_from_stream(tcp_stream: &mut TcpStream) -> AsyncResult<Headers> {
+        let mut buffers: Vec<u8> = vec![0u8; 1000];
+        tcp_stream.read(&mut buffers).await?;
+        Ok(Headers::from_buffer(&buffers))
+    }
 }
 /// Quickly writes a response to the TcpStream with a valid `Sec-Websocket-Accept: {key}` if available
-pub async fn handshake(headers: Headers, tcp_stream: &mut TcpStream) -> AsyncResult<()> {
-    let default_str = String::new();
-    let key = headers.get("Sec-WebSocket-Key").unwrap_or(&default_str);
+pub async fn handshake(key: &str, tcp_stream: &mut TcpStream) -> AsyncResult<()> {
     let accept_key = get_accept_from_key(&key).unwrap_or("".to_string());
     // Just a quick reply with the `Sec-Websocket-Accept: {key}`
     let returned_string = format!("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: {accept_key}\r\n\r\n", accept_key = accept_key);
     tcp_stream.write_all(returned_string.as_bytes()).await?; // Accept the connection
     Ok(())
-}
-/// Upgrades the incoming GET request to a keep-open WebSocket connection
-pub async fn read_and_handshake(tcp_stream: &mut TcpStream) -> AsyncResult<()> {
-    let mut buffers: Vec<u8> = vec![0u8; 1000];
-    tcp_stream.read(&mut buffers).await?;
-    let headers = Headers::from_buffer(&buffers);
-    handshake(headers, tcp_stream).await
 }

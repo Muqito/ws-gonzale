@@ -8,6 +8,7 @@ use {
     async_trait::async_trait,
     futures::{AsyncReadExt, AsyncWriteExt},
 };
+
 /// Channels is sent to the struct implementing [`WsClientHook`] so they can use it to send to the mpmc channel or directly to the [`TcpStream`]
 pub type Channels = (Sender<Vec<u8>>, TcpStream);
 
@@ -23,43 +24,103 @@ pub trait WsClientHook {
     /// This our multi producer / multi consumer channel. (Could be done with a mpsc channel as well since we only ever use this once in the code?)
     fn set_channels(&mut self, ws_writer: Channels);
 }
+#[derive(Clone)]
 /// Our WSConnection after it's been upgraded from a TCPStream
-pub struct WsConnection {
-    /// Our [`TcpStream`] from [`async-net`]
-    tcp_stream: TcpStream,
+pub struct WsConnection(TcpStream);
+impl WsConnection {
+    pub fn get_tcp_stream(&self) -> TcpStream {
+        self.0.clone()
+    }
+}
+pub struct WsEvents {
+    ws_connection: WsConnection,
     /// Our multi producer / multi consumer channel channels we are creating upon creating the connection
     channel: Channel<Vec<u8>>,
     /// Client hooks; we could do this in the life cycle; but I wanted the library to be as easily implemented as possible for end users.
     /// So we'll have to deal with wrapping this behind a pointer (Boxing it here) since we don't know the size of the struct developers will implement WsClientHook on.
     client_hook: Box<dyn WsClientHook + Send + Sync>,
 }
+impl WsEvents {
+    /// Upgrades the TcpStream to a WsConnection that's basically a handshake between a client and server
+    /// and the connection is kept open.
+    pub async fn new(
+        ws_connection: WsConnection,
+        client_hook: impl WsClientHook + Send + Sync + 'static,
+    ) -> WsGonzaleResult<WsEvents> {
+        let mut ws_events = WsEvents {
+            ws_connection,
+            channel: async_channel::unbounded(),
+            client_hook: Box::new(client_hook),
+        };
+
+        let _ = ws_events.setup_listeners().await;
+
+        Ok(ws_events)
+    }
+    /// Clones the Sender channel and returns it. This is so we can have multiple places where we can send to this channel if desired.
+    /// Setup a reader of the multi producer and write to the underlying tcp_stream of our guest client.
+    async fn setup_listeners(&mut self) -> WsGonzaleResult<()> {
+        // Send the WsWriter to this stream to the client hook
+        self.client_hook
+            .set_channels((self.channel.0.clone(), self.ws_connection.get_tcp_stream()));
+
+        // Clone this because we are moving it into a new future which could be on another thread.
+        let channel_reader = self.channel.1.clone();
+
+        // Same idea here; we need to clone this so we can keep reading from tcp_stream in incoming_message
+        let mut tcp_stream_writer = self.ws_connection.get_tcp_stream();
+
+        task::spawn(async move {
+            // A nice welcome message once everything is setup, we are making sure this is the first thing the users see because of the await.
+            let _ = tcp_stream_writer
+                .write_all(&get_buffer(Message::Text("Welcome message!".to_string())))
+                .await;
+            while let Ok(buffer) = channel_reader.recv().await {
+                let _ = tcp_stream_writer.write_all(&buffer).await;
+            }
+            Ok::<(), std::io::Error>(())
+        });
+
+        let _ = self.client_hook.after_handshake().await;
+        Ok(())
+    }
+    /// This is the run which handles the WsEvents lifecycle.
+    /// Here we take full ownership because when we are done; we should drop the connection.
+    pub async fn run(mut self) -> WsGonzaleResult<()> {
+        while let Ok(message) = self.ws_connection.incoming_message().await {
+            if Message::Close == message {
+                break;
+            } else {
+                // pass events to client hook
+                let _ = self.client_hook.on_message(&message).await;
+            }
+        }
+        Ok(())
+    }
+}
 
 impl WsConnection {
     /// Upgrades the TcpStream to a WsConnection that's basically a handshake between a client and server
     /// and the connection is kept open.
-    pub async fn upgrade(
-        tcp_stream: TcpStream,
-        client_hook: impl WsClientHook + Send + Sync + 'static,
-    ) -> WsGonzaleResult<WsConnection> {
-        let mut connection = WsConnection {
-            tcp_stream,
-            channel: async_channel::unbounded(),
-            client_hook: Box::new(client_hook),
-        };
+    pub async fn upgrade(tcp_stream: TcpStream, accept_key: &str) -> WsGonzaleResult<WsConnection> {
+        let mut connection = WsConnection(tcp_stream);
         // Before returning the WsConnection; make sure the handshake is done.
         connection
-            .handshake()
+            .handshake(accept_key)
             .await
             .map_err(|_| std::io::Error::from(std::io::ErrorKind::Interrupted))?;
 
         Ok(connection)
     }
+    async fn handshake(&mut self, key: &str) -> Result<(), std::io::Error> {
+        handshake::handshake(key, &mut self.0).await
+    }
     /// Read incoming data packets from tcp stream
-    pub async fn incoming_message(&mut self) -> WsGonzaleResult<Message> {
+    async fn incoming_message(&mut self) -> WsGonzaleResult<Message> {
         let mut buffer: [u8; 2] = [0; 2];
 
         // Do a peek-ahead so we can utilize the read_exact of the full payload and then use From<&[u8]> for Dataframe
-        match self.tcp_stream.peek(&mut buffer).await {
+        match self.0.peek(&mut buffer).await {
             // Connection was aborted
             Ok(s) if s == 0 => {
                 return Err(std::io::Error::from(std::io::ErrorKind::ConnectionAborted))?;
@@ -73,55 +134,23 @@ impl WsConnection {
 
         // Just peek ahead for the largest data package 127 in size. That's 2 (two first frames including fin, rsv1-3, mask and payload_length) + 8 (u64 size in bytes) + 4 (masking_key) = 14
         let mut peeked_buff: [u8; 14] = [0; 14];
-        self.tcp_stream.peek(&mut peeked_buff).await?;
+        self.0.peek(&mut peeked_buff).await?;
 
         let dataframe = dataframe::DataframeBuilder::new(peeked_buff.to_vec()).unwrap();
         let mut payload: Vec<u8> = vec![0; dataframe.get_full_frame_length() as usize];
 
-        self.tcp_stream.read_exact(&mut payload).await?;
+        self.0.read_exact(&mut payload).await?;
 
         let dataframe = dataframe::DataframeBuilder::new(payload)?;
         let message = dataframe.get_message().unwrap_or(Message::Unknown);
 
-        let _ = self.client_hook.on_message(&message).await;
-
         Ok(message)
-    }
-    async fn handshake(&mut self) -> Result<(), std::io::Error> {
-        let _ = handshake::read_and_handshake(&mut self.tcp_stream).await;
-        // After handshake, notify WsClientHook struct that a handshake has been successful.
-        // Also pass a long a multi-producer `Sender<Vec<u8>>` so we can receive data from outside this lib.
-        self.setup_listeners();
-        // Notify the client_hook that everything is good to go so they can interact with this WsConnection.
-        let _ = self.client_hook.after_handshake().await;
-        Ok(())
-    }
-    /// Clones the Sender channel and returns it. This is so we can have multiple places where we can send to this channel if desired.
-    /// Setup a reader of the multi producer and write to the underlying tcp_stream of our guest client.
-    fn setup_listeners(&mut self) {
-        // Send the WsWriter to this stream to the client hook
-        self.client_hook
-            .set_channels((self.channel.0.clone(), self.tcp_stream.clone()));
-
-        // Clone this because we are moving it into a new future which could be on another thread.
-        let reader = self.channel.1.clone();
-        // Same idea here; we need to clone this so we can keep reading from tcp_stream in incoming_message
-        let mut tcp_stream = self.tcp_stream.clone();
-        task::spawn(async move {
-            // A nice welcome message once everything is setup, we are making sure this is the first thing the users see because of the await.
-            let _ = tcp_stream
-                .write_all(&get_buffer(Message::Text("Welcome message!".to_string())))
-                .await;
-            while let Ok(buffer) = reader.recv().await {
-                let _ = tcp_stream.write_all(&buffer).await;
-            }
-        });
     }
 }
 
 /// This Drop method around WsConnection is pretty neat. Makes sure we are notifying the developer created struct implemented WsClientHook that the
 /// WsConnection has been dropped
-impl Drop for WsConnection {
+impl Drop for WsEvents {
     fn drop(&mut self) {
         // Block this thread until notified since Drop doesn't support async
         let _ = task::block_on(self.client_hook.after_drop());
