@@ -26,6 +26,7 @@ fn get_accept_from_key(key: &str) -> Result<String, String> {
     let sha1_accept_key = sha1_str(&accept_key); // sha1 result
     Ok(encode(sha1_accept_key))
 }
+/// HTTP Request Headers
 #[derive(Debug)]
 pub struct Headers(HashMap<String, String>);
 
@@ -46,13 +47,15 @@ pub async fn handshake(key: &str, tcp_stream: &mut TcpStream) -> AsyncResult<()>
     Ok(())
 }
 
+/// HTTP Methods
 #[derive(Debug, PartialEq)]
-pub enum Method {
+pub enum HTTPMethod {
     GET,
     POST,
     DELETE,
     Unknown,
 }
+/// HTTP Request URI
 #[derive(Debug)]
 pub struct Uri(String);
 impl Deref for Uri {
@@ -62,9 +65,10 @@ impl Deref for Uri {
         self.0.as_str()
     }
 }
+/// HTTP Request Endpoints
 #[derive(Debug)]
 pub struct Endpoint {
-    method: Method,
+    method: HTTPMethod,
     uri: Uri,
 }
 impl Endpoint {
@@ -72,9 +76,9 @@ impl Endpoint {
         let mut splits = s.split(" ");
         Endpoint {
             method: match splits.next().unwrap_or("") {
-                "GET" => Method::GET,
-                "POST" => Method::POST,
-                _ => Method::Unknown,
+                "GET" => HTTPMethod::GET,
+                "POST" => HTTPMethod::POST,
+                _ => HTTPMethod::Unknown,
             },
             uri: Uri(splits
                 .next()
@@ -82,13 +86,14 @@ impl Endpoint {
                 .unwrap_or("".to_string())),
         }
     }
-    pub fn get_method(&self) -> &Method {
+    pub fn get_method(&self) -> &HTTPMethod {
         &self.method
     }
     pub fn get_uri(&self) -> &Uri {
         &self.uri
     }
 }
+/// HTTP Request Body
 #[derive(Debug, PartialEq)]
 pub struct Body(String);
 impl Body {
@@ -96,6 +101,8 @@ impl Body {
         &self.0
     }
 }
+
+/// HTTP Request
 #[derive(Debug)]
 pub struct Request {
     endpoint: Endpoint,
@@ -133,18 +140,17 @@ impl Request {
             Headers::new(headers)
         };
 
-        let data = if endpoint.method == Method::POST && body.is_some() {
-            Request {
+        let data = match (&endpoint.method, body) {
+            (HTTPMethod::POST, body @ Some(_)) => Request {
                 endpoint,
                 headers,
                 body,
-            }
-        } else {
-            Request {
+            },
+            _ => Request {
                 endpoint,
                 headers,
                 body: None,
-            }
+            },
         };
         Ok(data)
     }
@@ -187,7 +193,7 @@ mod tests {
         let result = Request::from_str(request).unwrap();
         let mut body = result.body.unwrap().0;
         body.retain(|c| !c.is_whitespace());
-        assert_eq!(result.endpoint.method, Method::POST);
+        assert_eq!(result.endpoint.method, HTTPMethod::POST);
         assert_eq!(body.len(), 6);
     }
     #[test]
@@ -204,7 +210,7 @@ mod tests {
         Content-Length: 15
 "#;
         let result = Request::from_str(request).unwrap();
-        assert_eq!(result.endpoint.method, Method::POST);
+        assert_eq!(result.endpoint.method, HTTPMethod::POST);
         assert_eq!(result.body, None);
     }
     #[test]
@@ -228,7 +234,7 @@ mod tests {
         Connection: keep-alive
         Content-Length: 15"#;
         let result = Request::from_str(request).unwrap();
-        assert_eq!(result.endpoint.method, Method::POST);
+        assert_eq!(result.endpoint.method, HTTPMethod::POST);
         assert_eq!(result.body, None);
     }
     #[test]
@@ -249,7 +255,7 @@ mod tests {
         }"#;
         let result = Request::from_str(request).unwrap();
         assert_eq!(result.headers.0.len(), 9);
-        assert_eq!(result.endpoint.method, Method::GET);
+        assert_eq!(result.endpoint.method, HTTPMethod::GET);
         assert_eq!(result.body, None);
     }
 }

@@ -30,6 +30,7 @@ impl WsConnection {
         self.0.clone()
     }
 }
+/// Handles WebSocket incoming data frames and sends back to [`WsClientHook`] methods.
 pub struct WsEvents {
     ws_connection: WsConnection,
     /// Our multi producer / multi consumer channel channels we are creating upon creating the connection

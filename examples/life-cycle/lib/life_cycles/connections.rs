@@ -7,7 +7,7 @@ use {
         async_std::{sync::Arc, task, task::JoinHandle},
         async_trait::async_trait,
         futures::StreamExt,
-        Channels, Message, Method, Request, Server, WsClientHook, WsConnection, WsEvents,
+        Channels, HTTPMethod, Message, Request, Server, WsClientHook, WsConnection, WsEvents,
     },
 };
 
@@ -75,7 +75,7 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                 // We extracted out TcpStream read from WsConnection so we can be more flexible in the implementation
                 let request = Request::read_from_stream(&mut connection).await?;
                 match request.get_endpoint().get_method() {
-                    Method::GET
+                    HTTPMethod::GET
                         if request
                             .get_headers()
                             .get("Upgrade")
@@ -98,7 +98,7 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                         let _ = ws_events.run().await?;
                     }
                     // Simple POST message to all clients on the server
-                    Method::POST => {
+                    HTTPMethod::POST => {
                         if let Some(body) = request.get_body() {
                             let send_data = body.get_body();
                             let _ = post_sender

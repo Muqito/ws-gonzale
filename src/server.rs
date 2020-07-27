@@ -14,7 +14,7 @@ impl<'a> Server {
             connection: listener,
         })
     }
-    /// Will basically poll-next on an incoming [`TcpStream`]
+    /// Will basically poll-next on an incoming [`TcpStream`](`async_net::TcpStream`)
     pub fn incoming(&self) -> Incoming<'_> {
         self.connection.incoming()
     }
