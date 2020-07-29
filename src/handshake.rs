@@ -156,8 +156,12 @@ impl Request {
     }
     pub async fn read_from_stream(tcp_stream: &mut TcpStream) -> WsGonzaleResult<Request> {
         let mut buffers: Vec<u8> = vec![0u8; 100000];
-        tcp_stream.read(&mut buffers).await?;
-        let buffers: Vec<u8> = buffers.into_iter().take_while(|&s| s != 0).collect();
+        let number = match tcp_stream.read(&mut buffers).await {
+            Ok(n) if n == 0 => return Err(WsGonzaleError::Unknown),
+            Ok(n) => n,
+            Err(_err) => return Err(WsGonzaleError::Unknown),
+        };
+        let buffers: Vec<u8> = buffers.into_iter().take(number).collect();
         let s = String::from_utf8_lossy(&buffers).to_string();
         Request::from_str(&s)
     }

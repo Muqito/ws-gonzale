@@ -97,18 +97,29 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                                 .await?;
                         let _ = ws_events.run().await?;
                     }
+                    HTTPMethod::GET => {
+                        let response = format!(
+                            "HTTP/1.0 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\nContent-Length: 2\r\n\r\nOK\r\n",
+                            microseconds = time.elapsed().as_micros()
+                        );
+                        let _ = connection.write_all(response.as_bytes()).await;
+                    }
                     // Simple POST message to all clients on the server
                     HTTPMethod::POST => {
                         if let Some(body) = request.get_body() {
                             let send_data = body.get_body();
-                            let _ = post_sender
+                            if let Err(err) = post_sender
                                 .send(ServerMessage::ClientMessage(Message::Text(
                                     send_data.to_string(),
                                 )))
-                                .await;
+                                .await
+                            {
+                                println!("Failed to send: {}", err);
+                            }
                             let response = format!(
-                                "HTTP/1.1 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\n\r\n{send_data}",
+                                "HTTP/1.0 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\nContent-Length: {send_data_length}\r\n\r\n{send_data}\r\n",
                                 send_data = send_data,
+                                send_data_length = send_data.len(),
                                 microseconds = time.elapsed().as_micros()
                             );
                             let _ = connection.write_all(response.as_bytes()).await;
