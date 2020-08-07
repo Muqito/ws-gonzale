@@ -1,6 +1,5 @@
 use {
-    crate::{dataframe, handshake, message::Message, Channel, WsGonzaleResult},
-    async_channel::Sender,
+    crate::{dataframe, handshake, message::Message, Channel, Sender, channel, WsGonzaleResult},
     async_net::TcpStream,
     async_std::task,
     async_trait::async_trait,
@@ -33,8 +32,6 @@ impl WsConnection {
 /// Handles WebSocket incoming data frames and sends back to [`WsClientHook`] methods.
 pub struct WsEvents {
     ws_connection: WsConnection,
-    /// Our multi producer / multi consumer channel channels we are creating upon creating the connection
-    channel: Channel<Vec<u8>>,
     /// Client hooks; we could do this in the life cycle; but I wanted the library to be as easily implemented as possible for end users.
     /// So we'll have to deal with wrapping this behind a pointer (Boxing it here) since we don't know the size of the struct developers will implement WsClientHook on.
     client_hook: Box<dyn WsClientHook + Send + Sync>,
@@ -48,7 +45,6 @@ impl WsEvents {
     ) -> WsGonzaleResult<WsEvents> {
         let mut ws_events = WsEvents {
             ws_connection,
-            channel: async_channel::unbounded(),
             client_hook: Box::new(client_hook),
         };
 
@@ -59,18 +55,16 @@ impl WsEvents {
     /// Clones the Sender channel and returns it. This is so we can have multiple places where we can send to this channel if desired.
     /// Setup a reader of the multi producer and write to the underlying tcp_stream of our guest client.
     async fn setup_listeners(&mut self) -> WsGonzaleResult<()> {
+        let (tx, mut rx) = channel::unbounded();
         // Send the WsWriter to this stream to the client hook
         self.client_hook
-            .set_channels((self.channel.0.clone(), self.ws_connection.get_tcp_stream()));
-
-        // Clone this because we are moving it into a new future which could be on another thread.
-        let channel_reader = self.channel.1.clone();
+            .set_channels((tx.clone(), self.ws_connection.get_tcp_stream()));
 
         // Same idea here; we need to clone this so we can keep reading from tcp_stream in incoming_message
         let mut tcp_stream_writer = self.ws_connection.get_tcp_stream();
 
         task::spawn(async move {
-            while let Ok(buffer) = channel_reader.recv().await {
+            while let Some(buffer) = rx.recv() {
                 let _ = tcp_stream_writer.write_all(&buffer).await;
             }
             Ok::<(), std::io::Error>(())

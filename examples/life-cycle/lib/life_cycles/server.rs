@@ -12,10 +12,10 @@ use {
 
 /// Takes care of basic `server-lifecycle`
 /// This handles ClientJoined, ClientDisconnected and ClientMessages for now.
-pub fn server(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Error>> {
+pub fn server(mut server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Error>> {
     task::spawn(async move {
-        let receiver = server_data.get_channel_receiver();
-        while let Ok(server_message) = receiver.recv().await {
+        let mut receiver = server_data.get_channel_receiver().await;
+        while let Some(server_message) = receiver.recv() {
             match server_message {
                 // The client passed the Message packet to the server
                 ServerMessage::ClientMessage(message) => {

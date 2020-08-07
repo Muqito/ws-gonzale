@@ -3,11 +3,10 @@ use {
     crate::lib::server::{ServerData, ServerMessage},
     std::sync::atomic::{AtomicUsize, Ordering},
     ws_gonzale::{
-        async_channel::Sender,
         async_std::{sync::Arc, task, task::JoinHandle},
         async_trait::async_trait,
         futures::StreamExt,
-        Channels, HTTPMethod, Message, Request, Server, WsClientHook, WsConnection, WsEvents,
+        Channels, HTTPMethod, Message, Request, Server, WsClientHook, WsConnection, WsEvents, Sender
     },
 };
 
@@ -36,8 +35,7 @@ impl WsClientHook for ConnectionEvents {
         if let Some(channels) = self.channels.take() {
             let _ = self
                 .server_sender
-                .send(ServerMessage::ClientJoined((self.get_id(), channels)))
-                .await;
+                .send(ServerMessage::ClientJoined((self.get_id(), channels)));
         }
         Ok(())
     }
@@ -45,16 +43,14 @@ impl WsClientHook for ConnectionEvents {
     async fn after_drop(&self) -> Result<(), ()> {
         let _ = self
             .server_sender
-            .send(ServerMessage::ClientDisconnected(self.get_id()))
-            .await;
+            .send(ServerMessage::ClientDisconnected(self.get_id()));
         Ok(())
     }
 
     async fn on_message(&self, message: &Message) -> Result<(), ()> {
         let _ = self
             .server_sender
-            .send(ServerMessage::ClientMessage(message.clone().to_owned()))
-            .await;
+            .send(ServerMessage::ClientMessage(message.clone().to_owned()));
         Ok(())
     }
 
@@ -108,14 +104,7 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                     HTTPMethod::POST => {
                         if let Some(body) = request.get_body() {
                             let send_data = body.get_body();
-                            if let Err(err) = post_sender
-                                .send(ServerMessage::ClientMessage(Message::Text(
-                                    send_data.to_string(),
-                                )))
-                                .await
-                            {
-                                println!("Failed to send: {}", err);
-                            }
+                            post_sender.send(ServerMessage::ClientMessage(Message::Text(send_data.to_string())));
                             let response = format!(
                                 "HTTP/1.0 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\nContent-Length: {send_data_length}\r\n\r\n{send_data}\r\n",
                                 send_data = send_data,

@@ -1,33 +1,34 @@
 pub use {
     std::collections::HashMap,
     ws_gonzale::{
-        async_channel::{self, Receiver, Sender},
         async_std::sync::{Arc, Mutex},
-        Channel, Channels, Message,
+        Channel, Channels, Message, Receiver, Sender, channel
     },
 };
-
 pub enum ServerMessage {
     ClientMessage(Message),
     ClientJoined((u32, Channels)),
     ClientDisconnected(u32),
 }
 pub struct ServerData {
-    channel: Channel<ServerMessage>,
+    sender: Sender<ServerMessage>,
+    receiver: Arc<Mutex<Option<Receiver<ServerMessage>>>>,
     pub connections: Arc<Mutex<HashMap<u32, Channels>>>,
 }
 impl ServerData {
     pub fn new() -> Self {
+        let (sender, receiver) = channel::unbounded();
         Self {
-            channel: async_channel::unbounded(),
+            sender,
+            receiver: Arc::new(Mutex::new(Some(receiver))),
             connections: Default::default(),
         }
     }
-    pub fn get_channel_receiver(&self) -> Receiver<ServerMessage> {
-        self.channel.1.clone()
+    pub async fn get_channel_receiver(&self) -> Receiver<ServerMessage> {
+        self.receiver.lock().await.take().unwrap()
     }
     pub fn get_channel_sender(&self) -> Sender<ServerMessage> {
-        self.channel.0.clone()
+        self.sender.clone()
     }
     pub async fn get_nr_of_connections(&self) -> u64 {
         self.connections.lock().await.len() as u64

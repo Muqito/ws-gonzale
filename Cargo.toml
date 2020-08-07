@@ -14,7 +14,6 @@ license = "MIT OR Apache-2.0"
 futures = "0.3"
 async-std = "1.6.2"
 async-net = "0.1"
-async-channel = "1.1.1"
 async-trait = "0.1.36"
 
 sha1 = "0.6.0"
