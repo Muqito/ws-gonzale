@@ -1,12 +1,16 @@
 use futures::AsyncWriteExt;
 use {
     crate::lib::server::{ServerData, ServerMessage},
-    std::sync::atomic::{AtomicUsize, Ordering},
+    std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     ws_gonzale::{
-        async_std::{sync::Arc, task, task::JoinHandle},
+        async_std::{task, task::JoinHandle},
         async_trait::async_trait,
         futures::StreamExt,
-        Channels, HTTPMethod, Message, Request, Server, WsClientHook, WsConnection, WsEvents, Sender
+        Channels, HTTPMethod, Message, Request, Sender, Server, WsClientHook, WsConnection,
+        WsEvents,
     },
 };
 
@@ -104,7 +108,9 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                     HTTPMethod::POST => {
                         if let Some(body) = request.get_body() {
                             let send_data = body.get_body();
-                            post_sender.send(ServerMessage::ClientMessage(Message::Text(send_data.to_string())));
+                            post_sender.send(ServerMessage::ClientMessage(Message::Text(
+                                send_data.to_string(),
+                            )));
                             let response = format!(
                                 "HTTP/1.0 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\nContent-Length: {send_data_length}\r\n\r\n{send_data}\r\n",
                                 send_data = send_data,

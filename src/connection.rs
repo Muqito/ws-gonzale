@@ -1,5 +1,5 @@
 use {
-    crate::{dataframe, handshake, message::Message, Channel, Sender, channel, WsGonzaleResult},
+    crate::{channel, dataframe, handshake, message::Message, Sender, WsGonzaleResult},
     async_net::TcpStream,
     async_std::task,
     async_trait::async_trait,

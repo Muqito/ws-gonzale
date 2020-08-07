@@ -1,8 +1,5 @@
 extern crate ws_gonzale;
-pub use {
-    crate::lib::server::ServerData,
-    ws_gonzale::{async_std::sync::Arc, AsyncResult},
-};
+pub use {crate::lib::server::ServerData, std::sync::Arc, ws_gonzale::AsyncResult};
 
 pub mod life_cycles;
 pub mod server;
