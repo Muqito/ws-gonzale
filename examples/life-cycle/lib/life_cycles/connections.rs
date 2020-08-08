@@ -65,7 +65,7 @@ impl WsClientHook for ConnectionEvents {
 pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::io::Error>> {
     task::spawn(async move {
         // TODO: Extract this from a Config struct that's built with .dotenv or something
-        let server = Server::new("127.0.0.1:8080").await?;
+        let server = Server::new("127.0.0.1:8080".parse().unwrap()).await?;
         let mut incoming = server.incoming();
         while let Some(Ok(mut connection)) = incoming.next().await {
             let time = std::time::Instant::now();
