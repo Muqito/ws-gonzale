@@ -1,5 +1,5 @@
 use {
-    crate::{dataframe, handshake, message::Message, Channel, Sender, channel, WsGonzaleResult},
+    crate::{channel, dataframe, handshake, message::Message, Channel, Sender, WsGonzaleResult},
     async_net::TcpStream,
     async_std::task,
     async_trait::async_trait,
@@ -13,11 +13,11 @@ pub type Channels = (Sender<Vec<u8>>, TcpStream);
 #[async_trait]
 pub trait WsClientHook {
     /// Once the user has been upgraded from a regular HTTP GET request to a WS connection that's kept open.
-    async fn after_handshake(&mut self) -> Result<(), ()>;
+    fn after_handshake(&mut self) -> Result<(), ()>;
     /// Once the connection has dropped, this is async so we can wait for this because drop doesn't have an async implementation yet/ever?
-    async fn after_drop(&self) -> Result<(), ()>;
+    fn after_drop(&self) -> Result<(), ()>;
     /// When we've interpreted a complete WS frame packet
-    async fn on_message(&self, message: &Message) -> Result<(), ()>;
+    fn on_message(&self, message: &Message) -> Result<(), ()>;
     /// This our multi producer / multi consumer channel. (Could be done with a mpsc channel as well since we only ever use this once in the code?)
     fn set_channels(&mut self, ws_writer: Channels);
 }
@@ -70,7 +70,7 @@ impl WsEvents {
             Ok::<(), std::io::Error>(())
         });
 
-        let _ = self.client_hook.after_handshake().await;
+        let _ = self.client_hook.after_handshake();
         Ok(())
     }
     /// This is the run which handles the WsEvents lifecycle.
@@ -81,7 +81,7 @@ impl WsEvents {
                 break;
             } else {
                 // pass events to client hook
-                let _ = self.client_hook.on_message(&message).await;
+                let _ = self.client_hook.on_message(&message);
             }
         }
         Ok(())
@@ -142,6 +142,6 @@ impl WsConnection {
 impl Drop for WsEvents {
     fn drop(&mut self) {
         // Block this thread until notified since Drop doesn't support async
-        let _ = task::block_on(self.client_hook.after_drop());
+        self.client_hook.after_drop();
     }
 }

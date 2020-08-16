@@ -6,7 +6,8 @@ use {
         async_std::{sync::Arc, task, task::JoinHandle},
         async_trait::async_trait,
         futures::StreamExt,
-        Channels, HTTPMethod, Message, Request, Server, WsClientHook, WsConnection, WsEvents, Sender
+        Channels, HTTPMethod, Message, Request, Sender, Server, WsClientHook, WsConnection,
+        WsEvents,
     },
 };
 
@@ -31,7 +32,7 @@ impl ConnectionEvents {
 }
 #[async_trait]
 impl WsClientHook for ConnectionEvents {
-    async fn after_handshake(&mut self) -> Result<(), ()> {
+    fn after_handshake(&mut self) -> Result<(), ()> {
         if let Some(channels) = self.channels.take() {
             let _ = self
                 .server_sender
@@ -40,14 +41,14 @@ impl WsClientHook for ConnectionEvents {
         Ok(())
     }
 
-    async fn after_drop(&self) -> Result<(), ()> {
+    fn after_drop(&self) -> Result<(), ()> {
         let _ = self
             .server_sender
             .send(ServerMessage::ClientDisconnected(self.get_id()));
         Ok(())
     }
 
-    async fn on_message(&self, message: &Message) -> Result<(), ()> {
+    fn on_message(&self, message: &Message) -> Result<(), ()> {
         let _ = self
             .server_sender
             .send(ServerMessage::ClientMessage(message.clone().to_owned()));
@@ -104,7 +105,9 @@ pub fn connections(server_data: Arc<ServerData>) -> JoinHandle<Result<(), std::i
                     HTTPMethod::POST => {
                         if let Some(body) = request.get_body() {
                             let send_data = body.get_body();
-                            post_sender.send(ServerMessage::ClientMessage(Message::Text(send_data.to_string())));
+                            post_sender.send(ServerMessage::ClientMessage(Message::Text(
+                                send_data.to_string(),
+                            )));
                             let response = format!(
                                 "HTTP/1.0 200 OK\r\nRequest-Duration-In-Microseconds: {microseconds}\r\nContent-Length: {send_data_length}\r\n\r\n{send_data}\r\n",
                                 send_data = send_data,

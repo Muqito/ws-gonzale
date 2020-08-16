@@ -1,16 +1,16 @@
+pub mod channel;
 pub mod connection;
 pub mod dataframe;
 pub mod handshake;
 pub mod message;
 pub mod server;
-pub mod channel;
 
+pub use self::channel::*;
 pub use self::connection::*;
 pub use self::dataframe::*;
 pub use self::handshake::*;
 pub use self::message::*;
 pub use self::server::*;
-pub use self::channel::*;
 
 pub use async_net;
 pub use async_std;

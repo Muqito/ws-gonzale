@@ -1,6 +1,6 @@
 use {
     crate::AsyncResult,
-    async_net::{Incoming, TcpListener, AsyncToSocketAddrs},
+    async_net::{AsyncToSocketAddrs, Incoming, TcpListener},
 };
 
 /// A [`TcpListener`] handling incoming [`TcpStream`](`async_net::TcpStream`)

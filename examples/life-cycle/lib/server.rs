@@ -2,7 +2,7 @@ pub use {
     std::collections::HashMap,
     ws_gonzale::{
         async_std::sync::{Arc, Mutex},
-        Channel, Channels, Message, Receiver, Sender, channel
+        channel, Channel, Channels, Message, Receiver, Sender,
     },
 };
 pub enum ServerMessage {
