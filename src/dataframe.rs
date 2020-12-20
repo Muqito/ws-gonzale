@@ -165,7 +165,7 @@ impl DataframeBuilder {
             ExtraSize::Zero(size) => size as u64,
             ExtraSize::Two => match slice {
                 [_, _, first, second, ..] if slice.len() > 4 => {
-                    u32::from_be_bytes([0, 0, *first, *second]) as u64
+                    u16::from_be_bytes([*first, *second]) as u64
                 }
                 _ => return Err(WsGonzaleError::Unknown),
             },
